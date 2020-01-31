@@ -1,0 +1,17 @@
+{
+    "name": "stance",
+    "version": "1.0.0",
+    "description": "A prone/croush script",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "fivem",
+        "prone",
+        "croush"
+    ],
+    "author": "Ammar B.",
+    "license": "ISC",
+    "dependencies": {}
+}

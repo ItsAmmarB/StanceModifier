@@ -1,0 +1,1 @@
+console.debug('Stance Started kickin\' ass!');
