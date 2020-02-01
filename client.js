@@ -1,8 +1,8 @@
 /**
  * Stance Modifier (Javascript edition)
  * Author: Ammar B. (Discord: Ammar B.#5160)
- * Release: 1.0.0
- * Date: 31/1/2020
+ * Release: 1.0.1
+ * Date: 30/1/2020
  * 
  * Credits to:
  * JediJosh920 (https://www.gta5-mods.com/users/jedijosh920) (https://www.youtube.com/channel/UCmvRF-KB6xCwjHnNgMeUDXw)
@@ -14,19 +14,31 @@
  * DM me on discord or open issue card on github or on the cfx post if you have any issues/bugs/improvements.
  * 
  * Issues:
- *   - Dive doesn't work due to (Unkown reason <at least I didn't notice it>).
  *   - Snipers force 3rd person view due to (SCRIPTED_GUN_TASK_PLANE_WING).
  *
+ * Usage: 
+ * - Control.Duck (Ctrl) is used to modify stance.  
+ * - Holding Ctrl while in Idle, Stealth, or Crouch will immediately transfer to Prone 
+ * - Player will dive if transferring to prone while sprinting
+ * - Control.Sprint (Shift) while prone will toggle between on front and on back
+ * - Control.Jump (Space) will set the stance state back to Idle
+ * - States: Idle -> Stealth -> Crouch -> Prone -> Idle
+ *
  *  Commits:
- *   - Initial release, credits to TimothyDexter (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038)
+ *   - 30/1/2020 | 1.0.0 | Initial release, credits to TimothyDexter (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038)
+ *   - 1/2/2020 | 1.0.1 | Patch for Dive, now works.
+ * 
  */
 
 
 /*
-TIMERS AND DELAYS (DO NOT TOUCH IT)
+TIMERS AND DELAYS (DO NOT TOUCH IT, THOSE ARE PRECISE)
 */
 const delays = 1000;
 const proneToRagdollInvincibletime = 250;
+const transitionDiveToProne = 1050;
+const crawlOnFront = 850;
+const crawlOnBack = 1200;
 
 // VARIABLES (DO NOT TOUCH IT)
 let _lastKeyPress;
@@ -57,7 +69,7 @@ const controls = {
     duck: 36, // Duck (LEFT CTRL)
     proneFrontBackControl: 21, // Sprint (LEFT SHIFT)
     cancelToIdleControl: 22, //Jump (SPACE)
-    moveUpOnly: 32,  // Move Forward (W)
+    moveUpOnly: 32, // Move Forward (W)
     moveDownOnly: 33, // Move Backward (S)
     moveLeftOnly: 34, // Move Left (D)
     moveRightOnly: 35, // Move Right (A)
@@ -88,15 +100,19 @@ const proneStates = {
 [!Summary]
 */
 try {
-    RequestAnimDict('move_Prone');
     RequestAnimDict('move_crawl');
-    RequestAnimDict('move_jump');
+    // RequestAnimDict('move_jump');
     RequestAnimSet('move_ped_crouched');
     state = stanceStates.idle;
-    setTick(async () => { await Wait(1); onTick(); });
-    setTick(async () => { await Wait(1); modifyStance(); });
-}
-catch (err) {
+    setTick(async() => {
+        await Wait(1);
+        onTick();
+    });
+    setTick(async() => {
+        await Wait(1);
+        modifyStance();
+    });
+} catch (err) {
     handleError(err)
 }
 
@@ -109,60 +125,64 @@ async function onTick() {
 
     try {
         switch (state) {
-        case stanceStates.idle: {
-            resetAnimations();
-        }
-            break;
-        case stanceStates.stealth: {
-            const a = 'just a place holder'; // this line is just place holder for my ESLint    // Does Absolutely nothing
-            if(a.length > 50) console.log(a); // This one too, well, what are you gonna do      // Does Absolutely nothing
-        }
-            break;
-        case stanceStates.crouch: {
-            const _ped = GetPlayerPed(-1);
-            if (GetPedStealthMovement()) {
-                state = stanceStates.stealth;
-            }
-
-            if (GetFollowPedCamViewMode() === 4) {
-                SetFollowPedCamViewMode(0);
-            }
-
-            if (isCrouchStateCancelled() || _isCrouchBlocked) {
-                state = stanceStates.idle;
+            case stanceStates.idle:
+                {
+                    resetAnimations();
+                }
                 break;
-            }
-
-            SetPedMovementClipset(_ped, 'move_ped_crouched', 1);
-            SetPedStrafeClipset(_ped, 'move_ped_crouched_strafing');
-        }
-            break;
-        case stanceStates.prone: {
-            disableStealthControl();
-
-            if (_diveActive) break;
-
-            if (isProneStateCancelled() || _isProneblocked) {
-                state = stanceStates.idle;
+            case stanceStates.stealth:
+                {
+                    const a = 'just a place holder'; // this line is just place holder for my ESLint    // Does Absolutely nothing
+                    if (a.length > 50) console.log(a); // This one too, well, what are you gonna do      // Does Absolutely nothing
+                }
                 break;
-            }
+            case stanceStates.crouch:
+                {
+                    const _ped = GetPlayerPed(-1);
+                    if (GetPedStealthMovement()) {
+                        state = stanceStates.stealth;
+                    }
 
-            handleProneStateToggle();
-            handleProneAim();
-            await handleProneWeaponChange();
+                    if (GetFollowPedCamViewMode() === 4) {
+                        SetFollowPedCamViewMode(0);
+                    }
 
-            if (_proneAimActive) break;
+                    if (isCrouchStateCancelled() || _isCrouchBlocked) {
+                        state = stanceStates.idle;
+                        break;
+                    }
 
-            await proneMovement();
+                    SetPedMovementClipset(_ped, 'move_ped_crouched', 0.55);
+                    SetPedStrafeClipset(_ped, 'move_ped_crouched_strafing');
+                }
+                break;
+            case stanceStates.prone:
+                {
+                    disableStealthControl();
+
+                    if (_diveActive) break;
+
+                    if (isProneStateCancelled() || _isProneblocked) {
+                        state = stanceStates.idle;
+                        break;
+                    }
+
+                    handleProneStateToggle();
+                    handleProneAim();
+                    await handleProneWeaponChange();
+
+                    if (_proneAimActive) break;
+
+                    await proneMovement();
+                }
+                break;
+
+            default:
+                {
+                    await Wait(delays);
+                }
         }
-            break;
-
-        default: {
-            await Wait(delays);
-        }
-        }
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
     await Wait(0);
@@ -184,17 +204,15 @@ async function modifyStance() {
             if (state === stanceStates.crouch) {
                 cancelCrouch();
                 state = stanceStates.idle;
-            }
-            else if (state === stanceStates.prone) {
+            } else if (state === stanceStates.prone) {
                 await advanceState();
             }
             return;
         }
-        if(IsControlJustPressed(2, controls.duck)) {
+        if (IsControlJustPressed(2, controls.duck)) {
             _holdStateToggleActive = false;
             _lastKeyPress = GetGameTimer();
-        }
-        else if(IsControlPressed(2, controls.duck)) {
+        } else if (IsControlPressed(2, controls.duck)) {
             if (!_isProneblocked) {
                 if (_lastKeyPress < GetGameTimer() - 200) {
                     _holdStateToggleActive = true;
@@ -203,16 +221,14 @@ async function modifyStance() {
                     }
                 }
             }
-        }
-        else if(IsControlJustReleased(0, controls.duck)) {
+        } else if (IsControlJustReleased(0, controls.duck)) {
             if (_lastKeyPress >= GetGameTimer() - 10) return;
             _lastKeyPress = GetGameTimer();
             if (!_holdStateToggleActive) {
                 await advanceState();
             }
         }
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -227,8 +243,7 @@ function cancelCrouch() {
         const _ped = GetPlayerPed(-1);
         ResetPedMovementClipset(_ped, 1);
         ResetPedStrafeClipset(_ped);
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -244,38 +259,42 @@ async function advanceState() {
         ClearPedTasks(_ped);
         cancelCrouch();
         switch (state) {
-        case stanceStates.idle: {
-            state = stanceStates.stealth;
+            case stanceStates.idle:
+                {
+                    state = stanceStates.stealth;
+                }
+                break;
+            case stanceStates.stealth:
+                {
+                    if (_isCrouchBlocked) {
+                        state = stanceStates.idle;
+                        return;
+                    }
+                    state = stanceStates.crouch;
+                }
+                break;
+            case stanceStates.crouch:
+                {
+                    if (_isProneblocked) {
+                        state = stanceStates.idle;
+                        return;
+                    }
+                    await transitionToProneState();
+                }
+                break;
+            case stanceStates.prone:
+                {
+                    transitionProneToIdle();
+                    state = stanceStates.idle;
+                }
+                break;
+            default:
+                {
+                    console.error('Entered unused dafult stance state!');
+                }
+                break;
         }
-            break;
-        case stanceStates.stealth: {
-            if (_isCrouchBlocked) {
-                state = stanceStates.idle;
-                return;
-            }
-            state = stanceStates.crouch;
-        }
-            break;
-        case stanceStates.crouch: {
-            if (_isProneblocked) {
-                state = stanceStates.idle;
-                return;
-            }
-            await transitionToProneState();
-        }
-            break;
-        case stanceStates.prone: {
-            transitionProneToIdle();
-            state = stanceStates.idle;
-        }
-            break;
-        default: {
-            console.error('Entered unused dafult stance state!');
-        }
-            break;
-        }
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -293,8 +312,7 @@ function proneMovement() {
             if (!_crawlActive) {
                 handleCrawlMovement(IsControlJustPressed(2, controls.moveUpOnly) ? movements.forward : movements.backward);
             }
-        }
-        else if (IsControlPressed(2, controls.moveDownOnly) || IsControlPressed(2, controls.moveUpOnly)) {
+        } else if (IsControlPressed(2, controls.moveDownOnly) || IsControlPressed(2, controls.moveUpOnly)) {
             if (_lastKeyPress >= GetGameTimer() - _debounceTime) return;
             _lastKeyPress = GetGameTimer();
             _debounceTime = 10;
@@ -308,18 +326,16 @@ function proneMovement() {
             _lastLeftRightPress = GetGameTimer();
 
             const entity = GetPlayerPed(-1);
-            SetEntityHeading(entity, IsControlJustPressed(2, controls.moveLeftOnly) ? GetEntityHeading(entity) + 3 : GetEntityHeading(entity) - 3);
-        }
-        else if (IsControlPressed(2, controls.moveLeftOnly) || IsControlPressed(2, controls.moveRightOnly)) {
+            SetEntityHeading(entity, IsControlJustPressed(2, controls.moveLeftOnly) ? GetEntityHeading(entity) + 2 : GetEntityHeading(entity) - 2);
+        } else if (IsControlPressed(2, controls.moveLeftOnly) || IsControlPressed(2, controls.moveRightOnly)) {
             // if (_lastKeyPress >= GetGameTimer() - _debounceTime) return;
             _debounceTime = 10;
             _lastLeftRightPress = GetGameTimer();
 
             const entity = GetPlayerPed(-1);
-            SetEntityHeading(entity, IsControlPressed(2, controls.moveLeftOnly) ? GetEntityHeading(entity) + 1.75 : GetEntityHeading(entity) - 1.75);
+            SetEntityHeading(entity, IsControlPressed(2, controls.moveLeftOnly) ? GetEntityHeading(entity) + .75 : GetEntityHeading(entity) - .75);
         }
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -344,8 +360,7 @@ function goProne(proneState) {
         const animStartTime = 1000;
         const animFlags = 2; // ANIM_FLAG_STOP_LAST_FRAME
         TaskPlayAnimAdvanced(entity, 'move_crawl', animName, pX, pY, pZ, rX, rY, rZ, 8, -8, -1, animFlags, animStartTime, 2, 0);
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -367,22 +382,21 @@ async function transitionToProneState() {
         if (IsPedRunning(_ped) || IsPedSprinting(_ped)) {
             ClearPedTasks(_ped);
             _diveActive = true;
-            // await TaskPlayAnim(_ped, 'move_jump', 'dive_start_run', 8.0, 1.0, 1, , 0.0, 0, 0, 0);
-            await TaskPlayAnim(_ped, 'move_jump', 'dive_start_run', 1, 1, 2, 4194304, 0);
-            await Wait(1100);
-            _diveActive = false;
+            TaskPlayAnim(_ped, "move_jump", "dive_start_run", 8.0, -8.0, -1, 0, 0.0, 0, 0, 0)
+            setTimeout(() => {
+                _diveActive = false;
+            }, transitionDiveToProne)
         }
-        if (IsPedRagdoll(_ped)) {
-            state = stanceStates.idle;
-        }
-        else if (IsPedArmed(_ped, 4)) {
-            TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true);
-        }
-        else {
-            TaskPlayAnim(_ped, 'move_crawl', 'onfront_fwd', 8, -8, -1, 2, 0);
-        }
-    }
-    catch (err) {
+        setTimeout(() => {
+            if (IsPedRagdoll(_ped)) {
+                state = stanceStates.idle;
+            } else if (IsPedArmed(_ped, 4)) {
+                TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true);
+            } else {
+                TaskPlayAnim(_ped, 'move_crawl', 'onfront_fwd', 8, -8, -1, 2, 0);
+            }
+        }, _diveActive ? transitionDiveToProne : 0)
+    } catch (err) {
         handleError(err);
     }
 }
@@ -398,10 +412,11 @@ async function transitionProneToIdle() {
         const entity = GetPlayerPed(-1);
         SetEntityInvincible(entity, true);
         SetPedToRagdoll(entity, 1, 1, 2);
-        await Wait(proneToRagdollInvincibletime);
-        SetEntityInvincible(entity, false);
-    }
-    catch (err) {
+        setTimeout(() => {
+            SetEntityInvincible(entity, false);
+
+        }, proneToRagdollInvincibletime)
+    } catch (err) {
         handleError(err);
     }
 }
@@ -421,9 +436,8 @@ async function handleCrawlMovement(movementDirection) {
 
         setTimeout(() => {
             _crawlActive = false;
-        }, _proneState === proneStates.onFront ? 850 : 1200);
-    }
-    catch (err) {
+        }, _proneState === proneStates.onFront ? crawlOnFront : crawlOnBack);
+    } catch (err) {
         handleError(err);
         _crawlActive = false;
     }
@@ -442,16 +456,14 @@ async function crawl(movementDirection, proneState) {
         let movementStr;
         if (proneState === proneStates.onFront) {
             movementStr = movementDirection === movements.forward ? 'fwd' : 'bwd';
-        }
-        else {
+        } else {
             movementStr = movementDirection === movements.forward ? 'bwd' : 'fwd';
         }
         const entity = GetPlayerPed(-1);
         const animStr = `${proneStateStr}_${movementStr}`;
         StopAnimTask(entity, 'move_crawl', animStr);
         await TaskPlayAnim(entity, 'move_crawl', animStr, 8, -8, -1, 2, 0);
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -463,16 +475,15 @@ async function crawl(movementDirection, proneState) {
 */
 function handleProneStateToggle() {
     try {
-        if(!IsControlJustPressed(0, controls.proneFrontBackControl)) return;
+        if (!IsControlJustPressed(0, controls.proneFrontBackControl)) return;
 
-        if(_lastBodyFlip >= GetGameTimer() - 1000) return;
+        if (_lastBodyFlip >= GetGameTimer() - 1000) return;
 
         _lastBodyFlip = GetGameTimer();
 
         _proneState = _proneState === proneStates.onFront ? proneStates.onBack : proneStates.onFront;
         goProne(_proneState);
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -486,14 +497,13 @@ async function handleProneWeaponChange() {
     try {
         const _ped = GetPlayerPed(-1);
         const currentWeapon = GetHashKey(GetCurrentPedWeapon(_ped));
-        if(_perviousWeapon !== currentWeapon) {
+        if (_perviousWeapon !== currentWeapon) {
             _perviousWeapon = currentWeapon;
             const proneState = _proneState === proneStates.onBack ? proneStates.onBack : proneStates.onFront;
             goProne(proneState);
             await Wait(1000);
         }
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -507,10 +517,10 @@ function handleProneAim() {
     try {
         const _ped = GetPlayerPed(-1);
         const playerIsArmed = IsPedArmed(_ped, 4);
-        if(playerIsArmed && !_crawlActive && !_proneAimActive && IsControlPressed(2, controls.aim)) {
+        if (playerIsArmed && !_crawlActive && !_proneAimActive && IsControlPressed(2, controls.aim)) {
             TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true);
 
-            if(!_proneAimActive && _proneState === proneStates.onBack) {
+            if (!_proneAimActive && _proneState === proneStates.onBack) {
                 const [rX, rY, rZ] = GetEntityRotation(_ped);
                 SetEntityRotation(_ped, rX, rY, GetEntityHeading(_ped) - 180);
             }
@@ -519,11 +529,10 @@ function handleProneAim() {
             // TODO: Sniper overlay will not occur w/ "SCRIPTED_GUN_TASK_PLANE_WING" no matter what. #TimothyDexter (https://forum.cfx.re/u/timothy_dexter)
             // if (isUsingWeaponWithScope()) {
             //     console.log('Sniper used!')
-                DisplaySniperScopeThisFrame();
-                SetPedConfigFlag(_ped, 72, true)
-            // }
-        }
-        else if(playerIsArmed && IsControlJustReleased(2, controls.aim)) {
+            DisplaySniperScopeThisFrame();
+            SetPedConfigFlag(_ped, 72, true)
+                // }
+        } else if (playerIsArmed && IsControlJustReleased(2, controls.aim)) {
             TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), false, false);
             _proneAimActive = false
             if (_proneState === proneStates.onBack) {
@@ -532,8 +541,7 @@ function handleProneAim() {
                 goProne(proneStates.onBack);
             }
         }
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -546,8 +554,7 @@ function handleProneAim() {
 function isPlayerProne() {
     try {
         return state === proneStates.prone;
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
         return false;
     }
@@ -567,8 +574,7 @@ function isCrouchStateCancelled() {
         ResetPedMovementClipset(_ped, 1);
         ResetPedStrafeClipset(_ped);
         return true;
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
         return false;
     }
@@ -585,12 +591,11 @@ function isProneStateCancelled() {
         if (IsPedInMeleeCombat(_ped)) {
             SetPedToRagdoll(_ped, 1, 1, 0);
         }
-        if(!IsPedRagdoll(_ped)) return false;
+        if (!IsPedRagdoll(_ped)) return false;
 
         ClearPedTasks(_ped);
         return true;
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
         return false;
     }
@@ -620,12 +625,11 @@ function isUsingWeaponWithScope() {
         let checkSniperResult = false
 
         for (const sniper in snipers) {
-            if(currentWeapon === sniper) return checkSniperResult = true;
+            if (currentWeapon === sniper) return checkSniperResult = true;
         }
 
         return true;
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
         return false;
     }
@@ -640,8 +644,7 @@ function isUsingWeaponWithScope() {
 function disableStealthControl() {
     try {
         DisableControlAction(0, controls.duck, true);
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -661,13 +664,12 @@ function resetAnimations() {
 
         const animationList = ['onfront_fwd', 'onfront_bwd', 'onback_fwd', 'onback_bwd'];
 
-        for(const animation in animationList) {
-            if(IsEntityPlayingAnim(entity, 'move_crawl', animation, 3)) {
+        for (const animation in animationList) {
+            if (IsEntityPlayingAnim(entity, 'move_crawl', animation, 3)) {
                 StopAnimTask(entity, 'move_crawl', animation);
             }
         }
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
@@ -676,8 +678,7 @@ function handleBlockingEventWrapper(blockCrouch, blockProne) {
     try {
         _isCrouchBlocked = blockCrouch;
         _isProneblocked = blockProne;
-    }
-    catch (err) {
+    } catch (err) {
         handleError(err);
     }
 }
