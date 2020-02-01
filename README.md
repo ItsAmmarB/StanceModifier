@@ -19,7 +19,6 @@ DM me on discord or open issue card on github or on the cfx post if you have any
   - States: Idle -> Stealth -> Crouch -> Prone -> Idle
 
 **Issues:**
--	Dive doesn't work due to (Unkown reason <at least I didn't notice it>).
 -	Snipers force 3rd person view due to (SCRIPTED_GUN_TASK_PLANE_WING).
  
  **Installation:**
