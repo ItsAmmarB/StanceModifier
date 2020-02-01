@@ -6,7 +6,7 @@
  * 
  * Credits to:
  * JediJosh920 (https://www.gta5-mods.com/users/jedijosh920) (https://www.youtube.com/channel/UCmvRF-KB6xCwjHnNgMeUDXw)
- * TimothyDexter (https://forum.cfx.re/u/timothy_dexter) 
+ * TimothyDexter  (https://forum.cfx.re/u/timothy_dexter) 
  * 
  * Original CFX post (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038) By TimothyDexter (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038)
  * 
@@ -101,7 +101,7 @@ const proneStates = {
 */
 try {
     RequestAnimDict('move_crawl');
-    // RequestAnimDict('move_jump');
+    RequestAnimDict('move_jump');
     RequestAnimSet('move_ped_crouched');
     state = stanceStates.idle;
     setTick(async() => {
@@ -112,6 +112,7 @@ try {
         await Wait(1);
         modifyStance();
     });
+    emitNet('StanceModifier:Started')
 } catch (err) {
     handleError(err)
 }
