@@ -16,4 +16,4 @@ setTimeout(() => {
         console.error('Credits: TimothyDexter & JediJosh920')
         console.error('==========[Stance Modifier]==========')
     }
-}, 5000);
+}, 15000);
