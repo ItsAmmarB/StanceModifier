@@ -112,7 +112,6 @@ try {
         await Wait(1);
         modifyStance();
     });
-    emitNet('StanceModifier:Started')
 } catch (err) {
     handleError(err)
 }
