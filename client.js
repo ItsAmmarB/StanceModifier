@@ -27,6 +27,7 @@
  *  Commits:
  *   - 30/1/2020 | 1.0.0 | Initial release, credits to TimothyDexter (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038)
  *   - 1/2/2020 | 1.0.1 | Patch for Dive, now works.
+ *   - 2/2/2020 | 1.0.2 | Removed Server.js and the console message
  * 
  */
 
