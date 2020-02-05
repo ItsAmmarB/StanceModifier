@@ -21,6 +21,7 @@ Original [Mod](https://www.gta5-mods.com/scripts/stance) By [JediJosh920](https:
 
 **Issues:**
 -	Snipers force 3rd person view due to (SCRIPTED_GUN_TASK_PLANE_WING).
+- Ped will be seen standing up while it's aiming on prone/ [Fourthbeam](https://forum.cfx.re/u/fourthbeam/summary)
  
  **Installation:**
 drag the script folder to yous server resources folder, then go to `server.cfg` and add ``start StanceModifier``.
