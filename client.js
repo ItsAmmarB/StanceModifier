@@ -129,18 +129,18 @@ async function onTick() {
         switch (state) {
             case stanceStates.idle:
                 {
-                    SetPedStealthMovement(_ped, false, "0")
+                    SetPedStealthMovement(_ped, false, 0)
                     resetAnimations();
                 }
                 break;
             case stanceStates.stealth:
                 {
-                    SetPedStealthMovement(_ped, true, "0")
+                    SetPedStealthMovement(_ped, true, 0)
                 }
                 break;
             case stanceStates.crouch:
                 {
-                    SetPedStealthMovement(_ped, false, "0")
+                    SetPedStealthMovement(_ped, false, 0)
 
                     if (GetFollowPedCamViewMode() === 4) {
                         SetFollowPedCamViewMode(0);
