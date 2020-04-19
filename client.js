@@ -36,7 +36,7 @@
 TIMERS AND DELAYS (DO NOT TOUCH IT, THOSE ARE PRECISE)
 */
 const delays = 1000;
-const proneToRagdollInvincibletime = 250;
+const proneToRagdollInvincibleTime = 250;
 const transitionDiveToProne = 1050;
 const crawlOnFront = 850;
 const crawlOnBack = 1200;
@@ -53,12 +53,12 @@ let _proneAimActive;
 let _holdStateToggleActive;
 
 let _isCrouchBlocked;
-let _isProneblocked;
+let _isProneBlocked;
 
 let _proneState;
 let _previousProneState;
 
-let _perviousWeapon;
+let _previousWeapon;
 
 let state; // The Current state [idle, crouch, prone]
 
@@ -91,7 +91,7 @@ const movements = {
 
 const proneStates = {
     onFront: 0,
-    OnBack: 1
+    onBack: 1
 };
 
 
@@ -125,24 +125,22 @@ try {
 async function onTick() {
 
     try {
+        const _ped = GetPlayerPed(-1);
         switch (state) {
             case stanceStates.idle:
                 {
+                    SetPedStealthMovement(_ped, false, "0")
                     resetAnimations();
                 }
                 break;
             case stanceStates.stealth:
                 {
-                    const a = 'just a place holder'; // this line is just place holder for my ESLint    // Does Absolutely nothing
-                    if (a.length > 50) console.log(a); // This one too, well, what are you gonna do      // Does Absolutely nothing
+                    SetPedStealthMovement(_ped, true, "0")
                 }
                 break;
             case stanceStates.crouch:
                 {
-                    const _ped = GetPlayerPed(-1);
-                    if (GetPedStealthMovement()) {
-                        state = stanceStates.stealth;
-                    }
+                    SetPedStealthMovement(_ped, false, "0")
 
                     if (GetFollowPedCamViewMode() === 4) {
                         SetFollowPedCamViewMode(0);
@@ -160,10 +158,10 @@ async function onTick() {
             case stanceStates.prone:
                 {
                     disableStealthControl();
-
+                    SetPedStealthMovement(_ped, false, "0")
                     if (_diveActive) break;
 
-                    if (isProneStateCancelled() || _isProneblocked) {
+                    if (isProneStateCancelled() || _isProneBlocked) {
                         state = stanceStates.idle;
                         break;
                     }
@@ -205,6 +203,8 @@ async function modifyStance() {
             if (state === stanceStates.crouch) {
                 cancelCrouch();
                 state = stanceStates.idle;
+            } else if (state === stanceStates.stealth) {
+                state = stanceStates.idle;
             } else if (state === stanceStates.prone) {
                 await advanceState();
             }
@@ -214,10 +214,10 @@ async function modifyStance() {
             _holdStateToggleActive = false;
             _lastKeyPress = GetGameTimer();
         } else if (IsControlPressed(2, controls.duck)) {
-            if (!_isProneblocked) {
+            if (!_isProneBlocked) {
                 if (_lastKeyPress < GetGameTimer() - 200) {
                     _holdStateToggleActive = true;
-                    if (state === stanceStates.idle || state === stanceStates.stealth || state === stanceStates.croush) {
+                    if (state === stanceStates.idle || state === stanceStates.stealth || state === stanceStates.crouch) {
                         await transitionToProneState();
                     }
                 }
@@ -276,7 +276,7 @@ async function advanceState() {
                 break;
             case stanceStates.crouch:
                 {
-                    if (_isProneblocked) {
+                    if (_isProneBlocked) {
                         state = stanceStates.idle;
                         return;
                     }
@@ -291,7 +291,7 @@ async function advanceState() {
                 break;
             default:
                 {
-                    console.error('Entered unused dafult stance state!');
+                    console.error('Entered unused default stance state!');
                 }
                 break;
         }
@@ -357,7 +357,7 @@ function goProne(proneState) {
 
         const animName = proneState === proneStates.onFront ? 'onfront_fwd' : 'onback_fwd';
         const [pX, pY, pZ] = GetEntityCoords(entity);
-        const [rX, rY, rZ] = GetEntityRotation(entity);
+        const [rX, rY, rZ] = GetEntityRotation(entity, 0);
         const animStartTime = 1000;
         const animFlags = 2; // ANIM_FLAG_STOP_LAST_FRAME
         TaskPlayAnimAdvanced(entity, 'move_crawl', animName, pX, pY, pZ, rX, rY, rZ, 8, -8, -1, animFlags, animStartTime, 2, 0);
@@ -379,7 +379,7 @@ async function transitionToProneState() {
         _proneAimActive = false;
         _proneState = proneStates.onFront;
         _previousProneState = proneStates.onFront;
-        _perviousWeapon = GetHashKey(GetCurrentPedWeapon(_ped));
+        _previousWeapon = GetHashKey(GetCurrentPedWeapon(_ped, true));
         if (IsPedRunning(_ped) || IsPedSprinting(_ped)) {
             ClearPedTasks(_ped);
             _diveActive = true;
@@ -416,7 +416,7 @@ async function transitionProneToIdle() {
         setTimeout(() => {
             SetEntityInvincible(entity, false);
 
-        }, proneToRagdollInvincibletime)
+        }, proneToRagdollInvincibleTime)
     } catch (err) {
         handleError(err);
     }
@@ -462,7 +462,7 @@ async function crawl(movementDirection, proneState) {
         }
         const entity = GetPlayerPed(-1);
         const animStr = `${proneStateStr}_${movementStr}`;
-        StopAnimTask(entity, 'move_crawl', animStr);
+        StopAnimTask(entity, 'move_crawl', animStr, 0.0);
         await TaskPlayAnim(entity, 'move_crawl', animStr, 8, -8, -1, 2, 0);
     } catch (err) {
         handleError(err);
@@ -497,9 +497,9 @@ function handleProneStateToggle() {
 async function handleProneWeaponChange() {
     try {
         const _ped = GetPlayerPed(-1);
-        const currentWeapon = GetHashKey(GetCurrentPedWeapon(_ped));
-        if (_perviousWeapon !== currentWeapon) {
-            _perviousWeapon = currentWeapon;
+        const currentWeapon = GetHashKey(GetCurrentPedWeapon(_ped, true));
+        if (_previousWeapon !== currentWeapon) {
+            _previousWeapon = currentWeapon;
             const proneState = _proneState === proneStates.onBack ? proneStates.onBack : proneStates.onFront;
             goProne(proneState);
             await Wait(1000);
@@ -522,8 +522,8 @@ function handleProneAim() {
             TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true);
 
             if (!_proneAimActive && _proneState === proneStates.onBack) {
-                const [rX, rY, rZ] = GetEntityRotation(_ped);
-                SetEntityRotation(_ped, rX, rY, GetEntityHeading(_ped) - 180);
+                const [rX, rY, rZ] = GetEntityRotation(_ped, 5);
+                SetEntityRotation(_ped, rX, rY, rZ + 180);
             }
             _proneAimActive = true;
 
@@ -537,8 +537,8 @@ function handleProneAim() {
             TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), false, false);
             _proneAimActive = false
             if (_proneState === proneStates.onBack) {
-                const [rX, rY, rZ] = GetEntityRotation(_ped);
-                SetEntityRotation(_ped, rX, rY, GetEntityHeading(_ped) - 180);
+                const [rX, rY, rZ] = GetEntityRotation(_ped, 5);
+                SetEntityRotation(_ped, rX, rY, rZ + 180);
                 goProne(proneStates.onBack);
             }
         }
@@ -549,7 +549,7 @@ function handleProneAim() {
 
 /*
 <summary>
-    Returns if a player is currenty in the prone position
+    Returns if a player is currently in the prone position
 </summary>
 */
 function isPlayerProne() {
@@ -611,7 +611,7 @@ function isUsingWeaponWithScope() {
     try {
         console.log('checking Weapon now..')
         const _ped = GetPlayerPed(-1);
-        const currentWeapon = GetHashKey(GetCurrentPedWeapon(_ped));
+        const currentWeapon = GetHashKey(GetCurrentPedWeapon(_ped, true));
         console.log('Weapon checked!')
         const snipers = [
             GetHashKey('weapon_sniperrifle'),
@@ -621,12 +621,12 @@ function isUsingWeaponWithScope() {
             GetHashKey('weapon_marksmanrifle_mk2'),
             '679988344'
         ]
-        console.log('This Is Your Weapon Has: ' + currentWeapon)
+        console.log('This Is Your Weapon Hash: ' + currentWeapon)
         snipers.forEach(sniper => console.log(sniper))
         let checkSniperResult = false
 
         for (const sniper in snipers) {
-            if (currentWeapon === sniper) return checkSniperResult = true;
+            if (currentWeapon === parseInt(sniper)) return checkSniperResult = true;
         }
 
         return true;
@@ -639,7 +639,7 @@ function isUsingWeaponWithScope() {
 
 /*
 [Summary]
-     Disable stealh control (ctrl key)
+     Disable stealth control (ctrl key)
 [!Summary]
 */
 function disableStealthControl() {
@@ -660,14 +660,14 @@ function resetAnimations() {
     try {
         const entity = GetPlayerPed(-1);
         if (IsEntityPlayingAnim(entity, 'move_jump', 'dive_start_run', 3)) {
-            StopAnimTask(entity, 'move_jump', 'dive_start_run');
+            StopAnimTask(entity, 'move_jump', 'dive_start_run', 0.0);
         }
 
         const animationList = ['onfront_fwd', 'onfront_bwd', 'onback_fwd', 'onback_bwd'];
 
         for (const animation in animationList) {
             if (IsEntityPlayingAnim(entity, 'move_crawl', animation, 3)) {
-                StopAnimTask(entity, 'move_crawl', animation);
+                StopAnimTask(entity, 'move_crawl', animation, 0.0);
             }
         }
     } catch (err) {
@@ -678,7 +678,7 @@ function resetAnimations() {
 function handleBlockingEventWrapper(blockCrouch, blockProne) {
     try {
         _isCrouchBlocked = blockCrouch;
-        _isProneblocked = blockProne;
+        _isProneBlocked = blockProne;
     } catch (err) {
         handleError(err);
     }
