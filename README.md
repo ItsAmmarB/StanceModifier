@@ -9,6 +9,9 @@ Original CFX [post](https://forum.cfx.re/t/release-stance-modifier-crouch-and-pr
 
 Original [Mod](https://www.gta5-mods.com/scripts/stance) By [JediJosh920](https://www.gta5-mods.com/users/jedijosh920)
 
+**Contributors:**
+- [Xseba360](https://github.com/Xseba360)
+
 **Open issue card on github or on the cfx post if you have any issues/bugs/improvements.**
 - CFX Post: [Link](https://forum.cfx.re/t/stancemodifier-javascript-edition/1000270)
 
