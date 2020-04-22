@@ -158,7 +158,7 @@ async function onTick() {
             case stanceStates.prone:
                 {
                     disableStealthControl();
-                    SetPedStealthMovement(_ped, false, "0")
+                    SetPedStealthMovement(_ped, false, 0)
                     if (_diveActive) break;
 
                     if (isProneStateCancelled() || _isProneBlocked) {
