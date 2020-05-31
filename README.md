@@ -11,6 +11,7 @@ Original [Mod](https://www.gta5-mods.com/scripts/stance) By [JediJosh920](https:
 
 **Contributors:**
 - [Xseba360](https://github.com/Xseba360)
+- [ItsAmmarB](https://github.com/ItsAmmarB)
 
 **Open issue card on github or on the cfx post if you have any issues/bugs/improvements.**
 - CFX Post: [Link](https://forum.cfx.re/t/stancemodifier-javascript-edition/1000270)
@@ -29,4 +30,4 @@ Original [Mod](https://www.gta5-mods.com/scripts/stance) By [JediJosh920](https:
  **Installation:**
 drag the script folder to yous server resources folder, then go to `server.cfg` and add ``start StanceModifier``.
 
- **License:** Do what ever you want just don't claim it's yours, give me, TimothyDexter and JediJosh920 credits for the work.
+ **License:** Do what ever you want just don't claim it's yours, give TimothyDexter, JediJosh920 and Contributors credits for the work.
