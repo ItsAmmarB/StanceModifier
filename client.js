@@ -140,6 +140,8 @@ async function onTick() {
                 break;
             case stanceStates.crouch:
                 {
+                    SetPedCanPlayAmbientAnims(_ped, false)
+                    SetPedCanPlayAmbientBaseAnims(_ped, false)
                     SetPedStealthMovement(_ped, false, 0)
 
                     if (GetFollowPedCamViewMode() === 4) {
@@ -262,6 +264,8 @@ async function advanceState() {
         switch (state) {
             case stanceStates.idle:
                 {
+                    SetPedCanPlayAmbientAnims(_ped, true)
+                    SetPedCanPlayAmbientBaseAnims(_ped, true)
                     state = stanceStates.stealth;
                 }
                 break;
@@ -269,23 +273,34 @@ async function advanceState() {
                 {
                     if (_isCrouchBlocked) {
                         state = stanceStates.idle;
+                        SetPedCanPlayAmbientAnims(_ped, true)
+                        SetPedCanPlayAmbientBaseAnims(_ped, true)
                         return;
                     }
+                    SetPedCanPlayAmbientAnims(_ped, false)
+                    SetPedCanPlayAmbientBaseAnims(_ped, false)
                     state = stanceStates.crouch;
+                    ClearPedTasksImmediately(_ped)
                 }
                 break;
             case stanceStates.crouch:
                 {
                     if (_isProneBlocked) {
+                        SetPedCanPlayAmbientAnims(_ped, true)
+                        SetPedCanPlayAmbientBaseAnims(_ped, true)
                         state = stanceStates.idle;
                         return;
                     }
+                    SetPedCanPlayAmbientAnims(_ped, false)
+                    SetPedCanPlayAmbientBaseAnims(_ped, false)
                     await transitionToProneState();
                 }
                 break;
             case stanceStates.prone:
                 {
                     transitionProneToIdle();
+                    SetPedCanPlayAmbientAnims(_ped, true)
+                    SetPedCanPlayAmbientBaseAnims(_ped, true)
                     state = stanceStates.idle;
                 }
                 break;
