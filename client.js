@@ -10,699 +10,581 @@
  * 
  * Original CFX post (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038) By TimothyDexter (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038)
  * 
- * 
  * DM me on discord or open issue card on github or on the cfx post if you have any issues/bugs/improvements.
  * 
  * Issues:
  *   - Snipers force 3rd person view due to (SCRIPTED_GUN_TASK_PLANE_WING).
- *
- * Usage: 
- * - Control.Duck (Ctrl) is used to modify stance.  
- * - Holding Ctrl while in Idle, Stealth, or Crouch will immediately transfer to Prone 
- * - Player will dive if transferring to prone while sprinting
- * - Control.Sprint (Shift) while prone will toggle between on front and on back
- * - Control.Jump (Space) will set the stance state back to Idle
- * - States: Idle -> Stealth -> Crouch -> Prone -> Idle
- *
- *  Commits:
- *   - 30/1/2020 | 1.0.0 | Initial release, credits to TimothyDexter (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038)
- *   - 1/2/2020 | 1.0.1 | Patch for Dive, now works.
- *   - 2/2/2020 | 1.0.2 | Removed Server.js and the console message
+ *   - Ped will be seen standing up while aiming whilst prone state, (SCRIPTED_GUN_TASK_PLANE_WING) Animation is not synced with other clients. (Fourthbeam)[https://forum.cfx.re/u/fourthbeam/summary]
  * 
+ *  Useful sources:
+ *   - https://github.com/GTA-Network/GTAVTools/blob/master/GTAVHook/GTAV.h
+ * 
+ * 
+ *  Commits:
+ *   - 1/30/2020 | 1.0.0 | Initial release, credits to TimothyDexter (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038)
+ *   - 2/1/2020 | 1.0.1 | Patch for ProneFlip, now works.
+ *   - 2/2/2020 | 1.0.2 | Removed Server.js and the console message
+ *   - 3/8/2022 | 2.0.0 | Complete overhual and re-write, many issues and bugs were fixed
  */
 
 
-/*
-TIMERS AND DELAYS (DO NOT TOUCH IT, THOSE ARE PRECISE)
-*/
-const delays = 1000;
-const proneToRagdollInvincibleTime = 250;
-const transitionDiveToProne = 1050;
-const crawlOnFront = 850;
-const crawlOnBack = 1200;
+//========================================================================================================================
+//                                                     CHANGABLE VARIABLES
+//------------------------------------------------------------------------------------------------------------------------
+//                            MAKES SURE YOU KNOW WHAT YOU'RE DOING BEFORE YOU CHANGE ANYTHING 
+//========================================================================================================================
 
-// VARIABLES (DO NOT TOUCH IT)
-let _lastKeyPress;
-let _lastLeftRightPress;
-let _lastBodyFlip;
-let _debounceTime;
 
-let _diveActive;
-let _crawlActive;
-let _proneAimActive;
-let _holdStateToggleActive;
-
-let _isCrouchBlocked;
-let _isProneBlocked;
-
-let _proneState;
-let _previousProneState;
-
-let _previousWeapon;
-
-let state; // The Current state [idle, crouch, prone]
-
-/*
-CONTROL:
-refer to this document if you would like to change any control: https://docs.fivem.net/docs/game-references/controls/
-*/
-const controls = {
-    duck: 36, // Duck (LEFT CTRL)
-    proneFrontBackControl: 21, // Sprint (LEFT SHIFT)
-    cancelToIdleControl: 22, //Jump (SPACE)
-    moveUpOnly: 32, // Move Forward (W)
-    moveDownOnly: 33, // Move Backward (S)
-    moveLeftOnly: 34, // Move Left (D)
-    moveRightOnly: 35, // Move Right (A)
-    aim: 25, // Aim (RIGHT MOUSE)
+/**
+ * There will effect every player, choose them wisely
+ * refer to https://docs.fivem.net/docs/game-references/controls/
+ * if you want to change the default keybinds
+ */
+const Controls = {
+    Forward: 32, // Move Forward (W)
+    Backward: 33, // Move Backward (S)
+    Right: 34, // Move Right (D)
+    Left: 35, // Move Left (A)
+    Aim: 25, // Aim (RIGHT MOUSE)
 };
 
-const stanceStates = {
-    idle: 0,
-    stealth: 1,
-    crouch: 3,
-    prone: 4
+const Config = {
+    FPV: false, // First Person View, 
+    FireWhileProne: true,
+}
+/**
+ * NOTES:
+ * - The First person view is very laggy and unplayable, I highly recommned keeping it disabled, crashes may occure on low-end PC if enabled!! 
+ * - Using weapon whilst in prone stance will result in de-sync, others will see you standing up and they won't be able to inflict damage to you
+ */
+
+//========================================================================================================================
+//                                                    KEY MAPPINGS/KEYBINDS
+//------------------------------------------------------------------------------------------------------------------------
+//                            MAKES SURE YOU KNOW WHAT YOU'RE DOING BEFORE YOU CHANGE ANYTHING 
+//========================================================================================================================
+
+/**
+ * Refer to this page https://docs.fivem.net/docs/game-references/input-mapper-parameter-ids/
+ * if you are thinking of adjusting any of the below default key mappings/keybinds
+ */
+
+RegisterKeyMapping('=Stance-Advance', 'Advance Stance', 'keyboard', 'LCONTROL')
+RegisterKeyMapping('=Stance-ProneFlip', 'Prone flip', 'keyboard', 'X')
+
+RegisterKeyMapping('=Stance-ToIdle', 'Idle', 'keyboard', 'SPACE')
+RegisterKeyMapping('=Stance-ToStealth', 'Stealth', 'keyboard', '')
+RegisterKeyMapping('=Stance-ToCrouch', 'Crouch', 'keyboard', '')
+RegisterKeyMapping('=Stance-ToProne', 'Prone', 'keyboard', 'X')
+
+/**
+ * Using '=' as the first character decreases the possiblity of the command just randomly showing
+ */
+RegisterCommand('=Stance-Advance', () => { AdvanceStance(PlayerPedId()) });
+RegisterCommand('=Stance-ProneFlip', () => { ProneFlip(PlayerPedId()) });
+
+RegisterCommand('=Stance-ToIdle', () => { Idle(PlayerPedId()) });
+RegisterCommand('=Stance-ToStealth', () => { AdvanceStance(PlayerPedId(), Stances.Stealth) });
+RegisterCommand('=Stance-ToCrouch', () => { AdvanceStance(PlayerPedId(), Stances.Crouch) });
+RegisterCommand('=Stance-ToProne', () => { Prone(PlayerPedId()) });
+
+//========================================================================================================================
+//                                                          VARIABLES
+//------------------------------------------------------------------------------------------------------------------------
+//                            DO NOT TOUCH THE BELOW VARIABLES AS THEY ARE ESSENTIAL AND PRECISE  
+//========================================================================================================================
+
+const Timers = {
+    Delay: 1000,
+    ProneToIdleInvincibility: 250,
+    ProneTransition: 1050,
+    ForwardCrawl: 850,
+    BackwardCrawl: 1200,
+
+    DelayToAdvanceStance: 10,
+    DelayToProne: 200,
+    DelayToDive: 350,
+    DelayToFlip: 1000,
+    DelayToNextFlip: 250
 };
 
-const movements = {
-    forward: 0,
-    backward: 1
+const Stances = {
+    Idle: 0,
+    Stealth: 1,
+    Crouch: 2,
+    Prone: {
+        Stomach: 3,
+        Back: 4
+    }
 };
 
-const proneStates = {
-    onFront: 0,
-    onBack: 1
+const Movements = {
+    Forward: 0,
+    Backward: 1,
+    Left: 2,
+    Right: 3
 };
 
+const Cached = {
+    Prone: {
+        _state: null,
+        _lastKeyPressAt: null,
+        _debounceTime: null,
+        _lastLeftRightPressAt: null,
+        _lastBodyFlipAt: null,
+        _isDiveInProgree: null,
+        _isCrawlInProgress: null,
+        _previousState: null,
+        _previousWeapon: null,
+        _aimActive: null,
+        _allowFlip: null,
+        _lastProneAt: null
+    },
 
-/*
-[Summary]
-     const functions = Initialize functions
-[!Summary]
-*/
-try {
-    RequestAnimDict('move_crawl');
-    RequestAnimDict('move_jump');
-    RequestAnimSet('move_ped_crouched');
-    state = stanceStates.idle;
-    setTick(async() => {
-        await Wait(1);
-        onTick();
-    });
-    setTick(async() => {
-        await Wait(1);
-        modifyStance();
-    });
-} catch (err) {
-    handleError(err)
+    stance: Stances.Idle
 }
 
-/*
-<summary>
-    Stance OnTick
-</summary>;
-*/
-async function onTick() {
+RequestAnimDict('move_crawl');
+RequestAnimDict('move_jump');
+RequestAnimSet('move_ped_crouched');
 
-    try {
-        const _ped = GetPlayerPed(-1);
-        switch (state) {
-            case stanceStates.idle:
-                {
-                    SetPedStealthMovement(_ped, false, 0)
-                    resetAnimations();
-                }
+//========================================================================================================================
+//                                                           MAIN THREAD
+//------------------------------------------------------------------------------------------------------------------------
+//                            MAKES SURE YOU KNOW WHAT YOU'RE DOING BEFORE YOU CHANGE ANYTHING 
+//========================================================================================================================
+
+/**
+ * Runs every tick... obviously, cause preformance is overrated
+ */
+setInterval(() => {
+    const Ped = PlayerPedId(); // The player's ped that will be used in every tick, this is the only GetPlayerPed native in this script
+
+    /**
+     * This is basically the manager
+     * the [Cached.stance] is the current stance setting
+     * once [Cached.stance] is overwritten this switch will execute all needed functions for that stance to work
+     */
+    switch (Cached.stance) {
+        case Stances.Idle:
+            {
+                SetPedStealthMovement(Ped, false, 0)
+                ResetProneAnimation(Ped);
                 break;
-            case stanceStates.stealth:
-                {
-                    SetPedStealthMovement(_ped, true, 0)
-                }
-                break;
-            case stanceStates.crouch:
-                {
-                    SetPedCanPlayAmbientAnims(_ped, false)
-                    SetPedCanPlayAmbientBaseAnims(_ped, false)
-                    SetPedStealthMovement(_ped, false, 0)
-
-                    if (GetFollowPedCamViewMode() === 4) {
-                        SetFollowPedCamViewMode(0);
-                    }
-
-                    if (isCrouchStateCancelled() || _isCrouchBlocked) {
-                        state = stanceStates.idle;
-                        break;
-                    }
-
-                    SetPedMovementClipset(_ped, 'move_ped_crouched', 0.55);
-                    SetPedStrafeClipset(_ped, 'move_ped_crouched_strafing');
-                }
-                break;
-            case stanceStates.prone:
-                {
-                    disableStealthControl();
-                    SetPedStealthMovement(_ped, false, 0)
-                    if (_diveActive) break;
-
-                    if (isProneStateCancelled() || _isProneBlocked) {
-                        state = stanceStates.idle;
-                        break;
-                    }
-
-                    handleProneStateToggle();
-                    handleProneAim();
-                    await handleProneWeaponChange();
-
-                    if (_proneAimActive) break;
-
-                    await proneMovement();
-                }
-                break;
-
-            default:
-                {
-                    await Wait(delays);
-                }
-        }
-    } catch (err) {
-        handleError(err);
-    }
-    await Wait(0);
-}
-
-/*
-<summary>
-    Handle stance changes
-</summary>
-*/
-async function modifyStance() {
-    try {
-        const _ped = GetPlayerPed(-1);
-
-        if (IsPedCuffed(_ped) || IsPedUsingAnyScenario(_ped) || IsEntityPlayingAnim(_ped, 'mp_arresting', 'idle', 3) ||
-            IsEntityPlayingAnim(_ped, 'random@mugging3', 'handsup_standing_base', 3) || IsEntityPlayingAnim(_ped, 'random@arrests@busted', 'idle_a', 3) ||
-            IsControlJustPressed(2, controls.cancelToIdleControl) || IsPedInAnyVehicle(_ped, false) || IsEntityInWater(_ped) || IsPedSwimming(_ped) ||
-            IsPedSwimmingUnderWater(_ped) || GetVehiclePedIsTryingToEnter(_ped) !== 0) {
-            if (state === stanceStates.crouch) {
-                cancelCrouch();
-                state = stanceStates.idle;
-            } else if (state === stanceStates.stealth) {
-                state = stanceStates.idle;
-            } else if (state === stanceStates.prone) {
-                await advanceState();
             }
-            return;
-        }
-        if (IsControlJustPressed(2, controls.duck)) {
-            _holdStateToggleActive = false;
-            _lastKeyPress = GetGameTimer();
-        } else if (IsControlPressed(2, controls.duck)) {
-            if (!_isProneBlocked) {
-                if (_lastKeyPress < GetGameTimer() - 200) {
-                    _holdStateToggleActive = true;
-                    if (state === stanceStates.idle || state === stanceStates.stealth || state === stanceStates.crouch) {
-                        await transitionToProneState();
-                    }
-                }
+        case Stances.Stealth:
+            {
+                SetPedStealthMovement(Ped, true, 0)
+                break;
             }
-        } else if (IsControlJustReleased(0, controls.duck)) {
-            if (_lastKeyPress >= GetGameTimer() - 10) return;
-            _lastKeyPress = GetGameTimer();
-            if (!_holdStateToggleActive) {
-                await advanceState();
+        case Stances.Crouch:
+            {
+                SetPedCanPlayAmbientAnims(Ped, false)
+                SetPedCanPlayAmbientBaseAnims(Ped, false)
+                SetPedStealthMovement(Ped, false, 0)
+                ResetProneAnimation(Ped);
+
+                SetPedMovementClipset(Ped, 'move_ped_crouched', 0.55);
+                SetPedStrafeClipset(Ped, 'move_ped_crouched_strafing');
+
+                if (!Config.EnabledFPV && GetFollowPedCamViewMode() === 4) {
+                    SetFollowPedCamViewMode(0);
+                }
+
+                if (IsPedRagdoll(Ped) && IsPedInMeleeCombat(Ped)) {
+                    ClearPedTasks(Ped);
+                    ResetPedMovementClipset(Ped, 1);
+                    ResetPedStrafeClipset(Ped);
+
+                    Cached.stance = Stances.Idle;
+                    break;
+                }
+                break;
             }
-        }
-    } catch (err) {
-        handleError(err);
-    }
-}
+        case Stances.Prone.Stomach:
+        case Stances.Prone.Back:
+            {
+                DisableControlAction(0, Controls.Stance, true) // Disabled the duck key to prevent other stances from interferring, prone can be canceled with the jump key
+                !Config.FireWhileProne ? DisableControlAction(0, Controls.Aim, true) : undefined;
+                SetPedStealthMovement(Ped, false, 0)
 
-/*
-<summary>
-    Handle canceling crouch
-</summary>
-*/
-function cancelCrouch() {
-    try {
-        const _ped = GetPlayerPed(-1);
-        ResetPedMovementClipset(_ped, 1);
-        ResetPedStrafeClipset(_ped);
-    } catch (err) {
-        handleError(err);
-    }
-}
+                if (Cached.Prone._isDiveInProgree) break;
 
-/*
-<summary>
-    Handle state changes
-</summary>
-*/
-async function advanceState() {
-    try {
-        const _ped = GetPlayerPed(-1);
-        ClearPedTasks(_ped);
-        cancelCrouch();
-        switch (state) {
-            case stanceStates.idle:
-                {
-                    SetPedCanPlayAmbientAnims(_ped, true)
-                    SetPedCanPlayAmbientBaseAnims(_ped, true)
-                    state = stanceStates.stealth;
-                }
-                break;
-            case stanceStates.stealth:
-                {
-                    if (_isCrouchBlocked) {
-                        state = stanceStates.idle;
-                        SetPedCanPlayAmbientAnims(_ped, true)
-                        SetPedCanPlayAmbientBaseAnims(_ped, true)
-                        return;
-                    }
-                    SetPedCanPlayAmbientAnims(_ped, false)
-                    SetPedCanPlayAmbientBaseAnims(_ped, false)
-                    state = stanceStates.crouch;
-                    ClearPedTasksImmediately(_ped)
-                }
-                break;
-            case stanceStates.crouch:
-                {
-                    if (_isProneBlocked) {
-                        SetPedCanPlayAmbientAnims(_ped, true)
-                        SetPedCanPlayAmbientBaseAnims(_ped, true)
-                        state = stanceStates.idle;
-                        return;
-                    }
-                    SetPedCanPlayAmbientAnims(_ped, false)
-                    SetPedCanPlayAmbientBaseAnims(_ped, false)
-                    await transitionToProneState();
-                }
-                break;
-            case stanceStates.prone:
-                {
-                    transitionProneToIdle();
-                    SetPedCanPlayAmbientAnims(_ped, true)
-                    SetPedCanPlayAmbientBaseAnims(_ped, true)
-                    state = stanceStates.idle;
-                }
-                break;
-            default:
-                {
-                    console.error('Entered unused default stance state!');
-                }
-                break;
-        }
-    } catch (err) {
-        handleError(err);
-    }
-}
+                if (IsPedInMeleeCombat(Ped) || IsPedRagdoll(Ped)) {
+                    IsPedInMeleeCombat(Ped) ? SetPedToRagdoll(Ped, 1, 1, 0) : undefined;
+                    ClearPedTasks(Ped)
 
-/*
-<summary>
-    Handle player movement inputs in prone state
-</summary>
-*/
-function proneMovement() {
-    try {
-        if (IsControlJustPressed(2, controls.moveDownOnly) || IsControlJustPressed(2, controls.moveUpOnly)) {
-            _debounceTime = 100;
-            _lastKeyPress = GetGameTimer();
-            if (!_crawlActive) {
-                handleCrawlMovement(IsControlJustPressed(2, controls.moveUpOnly) ? movements.forward : movements.backward);
+                    Cached.stance = Stances.Idle;
+                    break;
+                }
+
+                // HandleProneFlips(Ped);
+                HandleProneWeaponChange(Ped);
+                handleProneAim(Ped)
+                HandleProneMovement(Ped);
+                break;
             }
-        } else if (IsControlPressed(2, controls.moveDownOnly) || IsControlPressed(2, controls.moveUpOnly)) {
-            if (_lastKeyPress >= GetGameTimer() - _debounceTime) return;
-            _lastKeyPress = GetGameTimer();
-            _debounceTime = 10;
+    }
 
-            if (!_crawlActive) {
-                handleCrawlMovement(IsControlPressed(2, controls.moveUpOnly) ? movements.forward : movements.backward);
+    /**
+     * Those are action that could interfer with stance animation or prevent it from working probably
+     * if any of those occure the ped will be set to the idle stance
+     */
+    if (IsPedCuffed(Ped) || IsPedUsingAnyScenario(Ped) || IsEntityPlayingAnim(Ped, 'mp_arresting', 'idle', 3) ||
+        IsEntityPlayingAnim(Ped, 'random@mugging3', 'handsup_standing_base', 3) || IsEntityPlayingAnim(Ped, 'random@arrests@busted', 'idle_a', 3) ||
+        IsPedInAnyVehicle(Ped, false) || IsEntityInWater(Ped) || IsPedSwimming(Ped) || IsPedSwimmingUnderWater(Ped) || GetVehiclePedIsTryingToEnter(Ped) !== 0) {
+        Idle(Ped)
+    }
+}, 15);
+
+/**
+ * @param {*} Ped The players' ped
+ * @param {*} AdvanceTo The specific stance to advance to if available (Optional)
+ * @description Advances to the next available stance, stance order: Idle -> Stealth -> Crouch ---> (repeat)
+ * @returns returnless
+ * @example AdvanceStance(Ped)
+ */
+const AdvanceStance = (Ped, AdvanceTo = undefined) => {
+
+    if (AdvanceTo) {
+        Cached.stance === Stances.Prone.Stomach || Cached.stance === Stances.Prone.Back ? ClearPedTasks(Ped) : undefined;
+        switch (AdvanceTo) {
+            case Stances.Idle: {
+                SetPedCanPlayAmbientAnims(Ped, true)
+                SetPedCanPlayAmbientBaseAnims(Ped, true)
+                Cached.stance === Stances.Crouch ? Idle(Ped) : undefined;
+
+                Cached.stance = Stances.Idle;
+                return;
+            }
+            case Stances.Stealth: {
+                SetPedCanPlayAmbientAnims(Ped, true)
+                SetPedCanPlayAmbientBaseAnims(Ped, true)
+                Cached.stance === Stances.Crouch ? Idle(Ped) : undefined;
+
+                Cached.stance = Stances.Stealth;
+                return;
+            }
+            case Stances.Crouch: {
+                SetPedCanPlayAmbientAnims(Ped, false)
+                SetPedCanPlayAmbientBaseAnims(Ped, false)
+
+                Cached.stance = Stances.Crouch;
+                return;
             }
         }
-        if (IsControlJustPressed(2, controls.moveLeftOnly) || IsControlJustPressed(2, controls.moveRightOnly)) {
-            _debounceTime = 100;
-            _lastLeftRightPress = GetGameTimer();
-
-            const entity = GetPlayerPed(-1);
-            SetEntityHeading(entity, IsControlJustPressed(2, controls.moveLeftOnly) ? GetEntityHeading(entity) + 2 : GetEntityHeading(entity) - 2);
-        } else if (IsControlPressed(2, controls.moveLeftOnly) || IsControlPressed(2, controls.moveRightOnly)) {
-            // if (_lastKeyPress >= GetGameTimer() - _debounceTime) return;
-            _debounceTime = 10;
-            _lastLeftRightPress = GetGameTimer();
-
-            const entity = GetPlayerPed(-1);
-            SetEntityHeading(entity, IsControlPressed(2, controls.moveLeftOnly) ? GetEntityHeading(entity) + .75 : GetEntityHeading(entity) - .75);
-        }
-    } catch (err) {
-        handleError(err);
     }
-}
+    else {
+        switch (Cached.stance) {
+            case Stances.Idle: {
+                SetPedCanPlayAmbientAnims(Ped, true)
+                SetPedCanPlayAmbientBaseAnims(Ped, true)
 
-/*
-<summary>
-    Trigger player prone animation
-</summary>
-<param name="proneState">on front or on back prone state</param>
-*/
-function goProne(proneState) {
-    try {
-        const entity = GetPlayerPed(-1);
-        if (_proneState !== _previousProneState) {
-            SetEntityHeading(entity, GetEntityHeading(entity) + 180);
-            _previousProneState = _proneState;
-        }
-
-        const animName = proneState === proneStates.onFront ? 'onfront_fwd' : 'onback_fwd';
-        const [pX, pY, pZ] = GetEntityCoords(entity);
-        const [rX, rY, rZ] = GetEntityRotation(entity, 0);
-        const animStartTime = 1000;
-        const animFlags = 2; // ANIM_FLAG_STOP_LAST_FRAME
-        TaskPlayAnimAdvanced(entity, 'move_crawl', animName, pX, pY, pZ, rX, rY, rZ, 8, -8, -1, animFlags, animStartTime, 2, 0);
-    } catch (err) {
-        handleError(err);
-    }
-}
-
-/*
-<summary>
-    Trigger player prone animation
-</summary>
-<param name="proneState">on front or on back prone state</param>
-*/
-async function transitionToProneState() {
-    try {
-        const _ped = GetPlayerPed(-1);
-        state = stanceStates.prone;
-        _proneAimActive = false;
-        _proneState = proneStates.onFront;
-        _previousProneState = proneStates.onFront;
-        _previousWeapon = GetHashKey(GetCurrentPedWeapon(_ped, true));
-        if (IsPedRunning(_ped) || IsPedSprinting(_ped)) {
-            ClearPedTasks(_ped);
-            _diveActive = true;
-            TaskPlayAnim(_ped, "move_jump", "dive_start_run", 8.0, -8.0, -1, 0, 0.0, 0, 0, 0)
-            setTimeout(() => {
-                _diveActive = false;
-            }, transitionDiveToProne)
-        }
-        setTimeout(() => {
-            if (IsPedRagdoll(_ped)) {
-                state = stanceStates.idle;
-            } else if (IsPedArmed(_ped, 4)) {
-                TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true);
-            } else {
-                TaskPlayAnim(_ped, 'move_crawl', 'onfront_fwd', 8, -8, -1, 2, 0);
+                Cached.stance = Stances.Stealth;
+                return;
             }
-        }, _diveActive ? transitionDiveToProne : 0)
-    } catch (err) {
-        handleError(err);
+            case Stances.Stealth: {
+                SetPedCanPlayAmbientAnims(Ped, false)
+                SetPedCanPlayAmbientBaseAnims(Ped, false)
+
+                Cached.stance = Stances.Crouch;
+                return;
+            }
+            case Stances.Crouch: {
+                SetPedCanPlayAmbientAnims(Ped, true)
+                SetPedCanPlayAmbientBaseAnims(Ped, true)
+                Idle(Ped);
+
+                Cached.stance = Stances.Idle;
+                return;
+            }
+        }
     }
 }
 
-/*
-<summary>
-    Transition from prone to idle
-</summary>
-*/
-async function transitionProneToIdle() {
-    try {
-        // Going ragdoll while prone has a small chance of inflicting dmg to ped, this should prevent that
-        const entity = GetPlayerPed(-1);
-        SetEntityInvincible(entity, true);
-        SetPedToRagdoll(entity, 1, 1, 2);
-        setTimeout(() => {
-            SetEntityInvincible(entity, false);
+/**
+ * @param {*} Ped The players' ped
+ * @description Resets the players' ped animation, this is basically being called after in every stance except the prone stance in case the prone animation get bugged.. from experience :/
+ * @returns returnless
+ * @example ResetProneAnimation(Ped)
+ */
+const ResetProneAnimation = Ped => {
+    if (IsEntityPlayingAnim(Ped, 'move_jump', 'dive_start_run', 3)) {
+        StopAnimTask(Ped, 'move_jump', 'dive_start_run', 0.0);
+    }
 
-        }, proneToRagdollInvincibleTime)
-    } catch (err) {
-        handleError(err);
+    const animationList = ['onfront_fwd', 'onfront_bwd', 'onback_fwd', 'onback_bwd'];
+    for (const animation in animationList) {
+        if (IsEntityPlayingAnim(Ped, 'move_crawl', animation, 3)) {
+            StopAnimTask(Ped, 'move_crawl', animation, 0.0);
+        }
     }
 }
 
-/*
-<summary>
-    Handle player crawling movement
-</summary>
-<param name="movementDirection">fwd or bwd movement</param>
-*/
+/**
+ * @param {*} Ped The players' ped
+ * @description Sets the players' ped stance to Idle
+ * @returns returnless
+ * @example Idle(Ped)
+ */
+const Idle = (Ped) => {
+    switch (Cached.stance) {
+        case Stances.Crouch:
+            {
+                ResetProneAnimation(Ped);
+                ResetPedMovementClipset(Ped, 1);
+                ResetPedStrafeClipset(Ped);
+                Cached.stance = Stances.Idle;
+                break;
+            }
+        case Stances.Stealth:
+            {
+                ResetProneAnimation(Ped);
+                Cached.stance = Stances.Idle;
+                break;
+            }
+        case Stances.Prone.Stomach:
+        case Stances.Prone.Back:
+            {
+                ResetProneAnimation(Ped);
+                SetEntityInvincible(Ped, true);// Going ragdoll while prone has a small chance of inflicting dmg to ped, this should prevent that, this is reverted in line No.
+                SetPedToRagdoll(Ped, 1, 1, 2);
+                setTimeout(() => SetEntityInvincible(Ped, false), Timers.ProneToIdleInvincibility)
+                Cached.stance = Stances.Idle;
+                break;
+            }
+    }
+}
 
-async function handleCrawlMovement(movementDirection) {
-    try {
-        if (_crawlActive) return;
-        _crawlActive = true;
-        await crawl(movementDirection, _proneState);
+/**
+ * @param {*} Ped The players' ped
+ * @description Sets the players' ped stance to prone
+ * @returns returnless
+ * @example Prone(Ped)
+ */
+const Prone = (Ped) => {
+    if (Cached.stance === Stances.Prone.Stomach || Cached.stance === Stances.Prone.Back) return;
+    Cached.stance = Stances.Prone.Stomach;
+
+    Cached.Prone._lastProneAt = GetGameTimer()
+    Cached.Prone._previousState = Cached.stance;
+    Cached.Prone._previousWeapon = GetHashKey(GetCurrentPedWeapon(Ped, true));
+
+    let _DiveInterferInterval;
+
+    if (IsPedRunning(Ped) || IsPedSprinting(Ped)) {
+        ClearPedTasks(Ped);
+        Cached.Prone._isDiveInProgree = true;
+        TaskPlayAnim(Ped, "move_jump", "dive_start_run", 8.0, -8.0, -1, 0, 0.0, 0, 0, 0)
+
+        /**
+         * This prevents force prone stance if the dive was canceled midway
+         * which will lead to a bugged ped stuck in prone stnace unable to move or cancel
+         * this interval is cleared later in line No.352 [clearInterval(_DiveInterferInterval)] to spare preformance
+         */
+        _DiveInterferInterval = setInterval(() => {
+            if (Cached.stance === Stances.Prone.Stomach ||
+                Cached.stance === Stances.Prone.Back) {
+                if (IsPedRagdoll(Ped)) {
+                    ClearPedTasksImmediately(Ped)
+                    Idle(Ped)
+                    Cached.stance = Stances.Idle;
+                }
+            }
+        }, 5);
 
         setTimeout(() => {
-            _crawlActive = false;
-        }, _proneState === proneStates.onFront ? crawlOnFront : crawlOnBack);
-    } catch (err) {
-        handleError(err);
-        _crawlActive = false;
+            Cached.Prone._isDiveInProgree = false;
+        }, Timers.ProneTransition)
     }
-}
 
-/*
-<summary>
-    Trigger player crawling animation
-</summary>
-<param name="movementDirection">fwd or bwd movement</param>
-<param name="proneState">on front or on back prone state</param>
-*/
-async function crawl(movementDirection, proneState) {
-    try {
-        const proneStateStr = proneState === proneStates.onFront ? 'onfront' : 'onback';
-        let movementStr;
-        if (proneState === proneStates.onFront) {
-            movementStr = movementDirection === movements.forward ? 'fwd' : 'bwd';
-        } else {
-            movementStr = movementDirection === movements.forward ? 'bwd' : 'fwd';
-        }
-        const entity = GetPlayerPed(-1);
-        const animStr = `${proneStateStr}_${movementStr}`;
-        StopAnimTask(entity, 'move_crawl', animStr, 0.0);
-        await TaskPlayAnim(entity, 'move_crawl', animStr, 8, -8, -1, 2, 0);
-    } catch (err) {
-        handleError(err);
-    }
-}
-
-/*
-<summary>
-    Handle prone front/back toggle
-</summary>
-*/
-function handleProneStateToggle() {
-    try {
-        if (!IsControlJustPressed(0, controls.proneFrontBackControl)) return;
-
-        if (_lastBodyFlip >= GetGameTimer() - 1000) return;
-
-        _lastBodyFlip = GetGameTimer();
-
-        _proneState = _proneState === proneStates.onFront ? proneStates.onBack : proneStates.onFront;
-        goProne(_proneState);
-    } catch (err) {
-        handleError(err);
-    }
-}
-
-/*
-<summary>
-    Handle prone weapon changes
-</summary>
-*/
-async function handleProneWeaponChange() {
-    try {
-        const _ped = GetPlayerPed(-1);
-        const currentWeapon = GetHashKey(GetCurrentPedWeapon(_ped, true));
-        if (_previousWeapon !== currentWeapon) {
-            _previousWeapon = currentWeapon;
-            const proneState = _proneState === proneStates.onBack ? proneStates.onBack : proneStates.onFront;
-            goProne(proneState);
-            await Wait(1000);
-        }
-    } catch (err) {
-        handleError(err);
-    }
-}
-
-/*
-<summary>
-    Handle prone aiming
-</summary>
-*/
-function handleProneAim() {
-    try {
-        const _ped = GetPlayerPed(-1);
-        const playerIsArmed = IsPedArmed(_ped, 4);
-        if (playerIsArmed && !_crawlActive && !_proneAimActive && IsControlPressed(2, controls.aim)) {
-            TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true);
-
-            if (!_proneAimActive && _proneState === proneStates.onBack) {
-                const [rX, rY, rZ] = GetEntityRotation(_ped, 5);
-                SetEntityRotation(_ped, rX, rY, rZ + 180);
+    setTimeout(() => {
+        clearInterval(_DiveInterferInterval) // Clearing the interval in line No.336
+        if (Cached.stance === Stances.Prone.Stomach || Cached.stance === Stances.Prone.Back) {
+            if (IsPedRagdoll(Ped)) {
+                Cached.stance = Stances.Idle;
             }
-            _proneAimActive = true;
-
-            // TODO: Sniper overlay will not occur w/ "SCRIPTED_GUN_TASK_PLANE_WING" no matter what. #TimothyDexter (https://forum.cfx.re/u/timothy_dexter)
-            // if (isUsingWeaponWithScope()) {
-            //     console.log('Sniper used!')
-            DisplaySniperScopeThisFrame();
-            SetPedConfigFlag(_ped, 72, true)
-                // }
-        } else if (playerIsArmed && IsControlJustReleased(2, controls.aim)) {
-            TaskAimGunScripted(_ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), false, false);
-            _proneAimActive = false
-            if (_proneState === proneStates.onBack) {
-                const [rX, rY, rZ] = GetEntityRotation(_ped, 5);
-                SetEntityRotation(_ped, rX, rY, rZ + 180);
-                goProne(proneStates.onBack);
+            else if (Config.FireWhileProne && IsPedArmed(Ped, 4)) {
+                TaskAimGunScripted(Ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true); // This is the same animation when Trevor was on the plane wing and shooting in Singleplayer
+            }
+            else {
+                const [pX, pY, pZ] = GetEntityCoords(Ped);
+                const [rX, rY, rZ] = GetEntityRotation(Ped, 0);
+                const animStartTime = 1;
+                const animFlags = 2; // ANIM_FLAG_STOP_LAST_FRAME
+                TaskPlayAnimAdvanced(Ped, 'move_crawl', 'onfront_fwd', pX, pY, pZ, rX, rY, rZ, 8, -8, -1, animFlags, animStartTime, 2, 0);
             }
         }
-    } catch (err) {
-        handleError(err);
+    }, Cached.Prone._isDiveInProgree ? Timers.ProneTransition : 0)
+}
+
+/**
+ * @param {*} Ped The players' ped
+ * @description Flip players' ped whilst in prone stance to crawl on stomach or back
+ * @returns returnless
+ * @example ProneFlip(Ped)
+ */
+const ProneFlip = (Ped) => {
+    if (Cached.Prone._lastProneAt >= GetGameTimer() - Timers.DelayToFlip) return;
+    if (Cached.Prone._lastBodyFlipAt >= GetGameTimer() - Timers.DelayToNextFlip) return;
+
+    Cached.Prone._lastBodyFlipAt = GetGameTimer();
+
+    if (Cached.stance !== Cached.Prone._previousState) {
+        SetEntityHeading(Ped, GetEntityHeading(Ped) + 180); // Rotating 180 degrees 
+        Cached.Prone._previousState = Cached.stance;
+    }
+
+    Cached.stance = Cached.stance === Stances.Prone.Stomach ? Stances.Prone.Back : Stances.Prone.Stomach;
+    UpdateProne(Ped);
+}
+
+
+
+/**
+ * @param {*} Ped The players' ped
+ * @description Handles changes to the prone stnace like; weapon change, start/stop aiming, and flipping on stomach/back
+ * @returns returnless
+ * @example UpdateProne(Ped)
+ */
+const UpdateProne = (Ped) => {
+    const animName = Cached.stance === Stances.Prone.Stomach ? 'onfront_fwd' : 'onback_fwd';
+    const [pX, pY, pZ] = GetEntityCoords(Ped);
+    const [rX, rY, rZ] = GetEntityRotation(Ped, 0);
+    const animStartTime = 1;
+    const animFlags = 2; // ANIM_FLAG_STOP_LAST_FRAME
+    StopAnimTask(Ped, 'move_crawl', animName, 0.0);
+    TaskPlayAnimAdvanced(Ped, 'move_crawl', animName, pX, pY, pZ, rX, rY, rZ, 8, -8, -1, animFlags, animStartTime, 2, 0);
+}
+
+/**
+ * @param {*} Ped The players' ped
+ * @description Handles weapons changes... self-explanatory
+ * @returns returnless
+ * @example HandleProneWeaponChange(Ped)
+ */
+const HandleProneWeaponChange = (Ped) => {
+    const currentWeapon = GetHashKey(GetCurrentPedWeapon(Ped, true));
+    if (Cached.Prone._previousWeapon !== currentWeapon) {
+        Cached.Prone._previousWeapon = currentWeapon;
+        UpdateProne(Ped);
     }
 }
 
-/*
-<summary>
-    Returns if a player is currently in the prone position
-</summary>
-*/
-function isPlayerProne() {
-    try {
-        return state === proneStates.prone;
-    } catch (err) {
-        handleError(err);
-        return false;
-    }
-}
-
-/*
-[Summary]
-     Return (and handle) whether or not player has cancelled Crouch state
-[!Summary]
-*/
-function isCrouchStateCancelled() {
-    try {
-        const _ped = GetPlayerPed(-1);
-        if (!IsPedRagdoll(_ped) && !IsPedInMeleeCombat(_ped)) return false;
-
-        ClearPedTasks(_ped);
-        ResetPedMovementClipset(_ped, 1);
-        ResetPedStrafeClipset(_ped);
-        return true;
-    } catch (err) {
-        handleError(err);
-        return false;
-    }
-}
-
-/*
-[Summary]
-     Return (and handle) whether or not player has cancelled prone state
-[!Summary]
-*/
-function isProneStateCancelled() {
-    try {
-        const _ped = GetPlayerPed(-1);
-        if (IsPedInMeleeCombat(_ped)) {
-            SetPedToRagdoll(_ped, 1, 1, 0);
+/**
+ * @param {*} Ped The players' ped
+ * @description Handles the players' movements in the prone stnace
+ * @returns returnless
+ * @var Cached.Prone._debounceTime is used to determine how fast you should be crawling while turning left/right or else you'd be crawling like a snail :p
+ * @example HandleProneWeaponChange(Ped)
+ */
+const HandleProneMovement = async (Ped) => {
+    if (IsControlJustPressed(2, Controls.Backward) || IsControlJustPressed(2, Controls.Forward)) {
+        Cached.Prone._lastKeyPressAt = GetGameTimer();
+        if (!Cached.Prone._isCrawlInProgress) {
+            Crawl(Ped, IsControlJustPressed(2, Controls.Forward) ? Movements.Forward : Movements.Backward);
         }
-        if (!IsPedRagdoll(_ped)) return false;
+    } else if (IsControlPressed(2, Controls.Backward) || IsControlPressed(2, Controls.Forward)) {
+        if (Cached.Prone._lastKeyPressAt >= GetGameTimer() - Cached.Prone._debounceTime) return;
+        Cached.Prone._lastKeyPressAt = GetGameTimer();
 
-        ClearPedTasks(_ped);
-        return true;
-    } catch (err) {
-        handleError(err);
-        return false;
+        if (!Cached.Prone._isCrawlInProgress) {
+            Crawl(Ped, IsControlPressed(2, Controls.Forward) ? Movements.Forward : Movements.Backward);
+        }
+    }
+    if (IsControlJustPressed(2, Controls.Left) || IsControlJustPressed(2, Controls.Right)) {
+        Cached.Prone._debounceTime = 100;
+        Cached.Prone._lastLeftRightPressAt = GetGameTimer();
+
+        SetEntityHeading(Ped, IsControlJustPressed(2, Controls.Left) ? GetEntityHeading(Ped) - 2 : GetEntityHeading(Ped) + 2);
+    } else if (IsControlPressed(2, Controls.Left) || IsControlPressed(2, Controls.Right)) {
+        Cached.Prone._debounceTime = 10;
+        Cached.Prone._lastLeftRightPressAt = GetGameTimer();
+
+        SetEntityHeading(Ped, IsControlPressed(2, Controls.Left) ? GetEntityHeading(Ped) - .75 : GetEntityHeading(Ped) + .75);
     }
 }
 
-/*
-[Summary]
-     Return whether or not player is using sniper rifle
-[!Summary]
-*/
-function isUsingWeaponWithScope() {
-    try {
-        console.log('checking Weapon now..')
-        const _ped = GetPlayerPed(-1);
-        const currentWeapon = GetHashKey(GetCurrentPedWeapon(_ped, true));
-        console.log('Weapon checked!')
-        const snipers = [
-            GetHashKey('weapon_sniperrifle'),
-            GetHashKey('weapon_heavysniper'),
-            GetHashKey('weapon_heavysniper_mk2'),
-            GetHashKey('weapon_marksmanrifle'),
-            GetHashKey('weapon_marksmanrifle_mk2'),
-            '679988344'
-        ]
-        console.log('This Is Your Weapon Hash: ' + currentWeapon)
-        snipers.forEach(sniper => console.log(sniper))
-        let checkSniperResult = false
+/**
+ * @param {*} Ped The players' ped
+ * @param {*} Direction The players' ped
+ * @description Handles the players' movements in the prone stnace
+ * @returns returnless
+ * @var Cached.Prone._debounceTime is used to determine how fast you should be crawling while turning left/right and is used as timing for the animation
+ * @example Crawl(Ped, Movements.Forward)
+ */
+const Crawl = async (Ped, Direction) => {
+    if (Cached.Prone._isCrawlInProgress) return;
+    Cached.Prone._isCrawlInProgress = true;
 
-        for (const sniper in snipers) {
-            if (currentWeapon === parseInt(sniper)) return checkSniperResult = true;
+    const proneStateStr = Cached.stance === Stances.Prone.Stomach ? 'onfront' : 'onback';
+    let movementStr;
+    if (Cached.stance === Stances.Prone.Stomach) {
+        movementStr = Direction === Movements.Forward ? 'fwd' : 'bwd';
+    } else {
+        movementStr = Direction === Movements.Backward ? 'bwd' : 'fwd';
+    }
+    const animStr = `${proneStateStr}_${movementStr}`;
+    StopAnimTask(Ped, 'move_crawl', animStr, 0.0);
+    TaskPlayAnim(Ped, 'move_crawl', animStr, 8, -8, -1, 2, 0);
+
+    setTimeout(() => Cached.Prone._isCrawlInProgress = false, Cached.stance === Stances.Prone.Stomach ? Timers.ForwardCrawl : Timers.BackwardCrawl);
+}
+
+/**
+ * @param {*} Ped The players' ped
+ * @description Handles the weapon aim while in prone stance 
+ * @returns returnless
+ * @example handleProneAim(Ped)
+ */
+const handleProneAim = (Ped) => {
+    const playerIsArmed = IsPedArmed(Ped, 4);
+    if (playerIsArmed && Config.FireWhileProne && !Cached.Prone._isCrawlInProgress && !Cached.Prone._AimActive && IsControlPressed(2, Controls.Aim)) {
+        TaskAimGunScripted(Ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true); // This is the same animation when Trevor was on the plane wing and shooting in Singleplayer
+
+        if (!Cached.Prone._AimActive && Cached.stance === Stances.Prone.Back) {
+            const [rX, rY, rZ] = GetEntityRotation(Ped, 5);
+            SetEntityRotation(Ped, rX, rY, rZ + 180);
+        }
+        Cached.Prone._AimActive = true;
+
+        // TODO: Sniper overlay will not occur w/ "SCRIPTED_GUN_TASK_PLANE_WING" no matter what. #TimothyDexter (https://forum.cfx.re/u/timothy_dexter)
+        if (IsPedUsingSniper(Ped)) {
+            DisplaySniperScopeThisFrame(); // shows the reticle while using a sniper
         }
 
-        return true;
-    } catch (err) {
-        handleError(err);
-        return false;
-    }
-}
-
-
-/*
-[Summary]
-     Disable stealth control (ctrl key)
-[!Summary]
-*/
-function disableStealthControl() {
-    try {
-        DisableControlAction(0, controls.duck, true);
-    } catch (err) {
-        handleError(err);
-    }
-}
-
-
-/*
-[Summary]
-    Reset all stance animations
-[!Summary]
-*/
-function resetAnimations() {
-    try {
-        const entity = GetPlayerPed(-1);
-        if (IsEntityPlayingAnim(entity, 'move_jump', 'dive_start_run', 3)) {
-            StopAnimTask(entity, 'move_jump', 'dive_start_run', 0.0);
+    } else if (playerIsArmed && IsControlJustReleased(2, Controls.Aim)) {
+        TaskAimGunScripted(Ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), false, false);
+        Cached.Prone._AimActive = false
+        if (Cached.stance === Stances.Prone.Back) {
+            const [rX, rY, rZ] = GetEntityRotation(Ped, 5);
+            SetEntityRotation(Ped, rX, rY, rZ + 180);
+            UpdateProne(Ped, Stances.Prone.Back);
         }
-
-        const animationList = ['onfront_fwd', 'onfront_bwd', 'onback_fwd', 'onback_bwd'];
-
-        for (const animation in animationList) {
-            if (IsEntityPlayingAnim(entity, 'move_crawl', animation, 3)) {
-                StopAnimTask(entity, 'move_crawl', animation, 0.0);
-            }
-        }
-    } catch (err) {
-        handleError(err);
     }
 }
 
-function handleBlockingEventWrapper(blockCrouch, blockProne) {
-    try {
-        _isCrouchBlocked = blockCrouch;
-        _isProneBlocked = blockProne;
-    } catch (err) {
-        handleError(err);
-    }
-}
+/**
+ * @param {*} Ped The players' ped
+ * @description Checks if the passed ped is using a sniper
+ * @returns Boolean
+ * @example IsPedUsingSniper(Ped)
+ */
+const IsPedUsingSniper = (Ped) => {
+    const currentWeapon = GetHashKey(GetCurrentPedWeapon(Ped, true));
+    const snipers = [
+        GetHashKey('weapon_sniperrifle'),
+        GetHashKey('weapon_heavysniper'),
+        GetHashKey('weapon_heavysniper_mk2'),
+        GetHashKey('weapon_marksmanrifle'),
+        GetHashKey('weapon_marksmanrifle_mk2'),
+        '679988344'
+    ]
+    let checkSniperResult = false
 
-function handleError(err) {
-    console.error('=========[ STANCE ERROR ]=========');
-    console.error(err.name);
-    console.error(err.message);
-    console.error(err.stack);
-    console.error('=========[ STANCE ERROR ]=========');
+    for (const sniper in snipers) {
+        if (currentWeapon === parseInt(sniper)) return checkSniperResult = true;
+    }
+
+    return true;
 }

@@ -13,20 +13,17 @@ Original [Mod](https://www.gta5-mods.com/scripts/stance) By [JediJosh920](https:
 - [Xseba360](https://github.com/Xseba360)
 - [ItsAmmarB](https://github.com/ItsAmmarB)
 
-**Open issue card on github or on the cfx post if you have any issues/bugs/improvements.**
-- CFX Post: [Link](https://forum.cfx.re/t/stancemodifier-javascript-edition/1000270)
-
-**Usage:**
-  - Control.Duck (Ctrl) is used to modify stance.  
-  - Holding Ctrl while in Idle, Stealth, or Crouch will immediately transfer to Prone 
-  - Control.Sprint (Shift) while prone will toggle between on front and on back
-  - Control.Jump (Space) will set the stance state back to Idle
-  - States: Idle -> Stealth -> Crouch -> Prone -> Idle
+**Features:**
+- Ability to go into stealth, crouch, and prone stance.
+- Ability to crawl on stomach and on back.
+- Mappable keys for easy and quick stance changes.
+- Everything is synchronized.... Everything that works.. is synchronized :p
 
 **Issues:**
 -	Snipers force 3rd person view due to (SCRIPTED_GUN_TASK_PLANE_WING).
 - Ped will be seen standing up while it's aiming on prone. [Fourthbeam](https://forum.cfx.re/u/fourthbeam/summary)
- 
+ **If you stumbled upon an issue or a bug; make sure to report it by creating an issue card**
+
  **Installation:**
 drag the script folder to yous server resources folder, then go to `server.cfg` and add ``start StanceModifier``.
 
