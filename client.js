@@ -238,9 +238,10 @@ setInterval(() => {
 }, 15);
 
 /**
+ * @name AdvanceStance 
+ * @description Advances to the next available stance, stance order: Idle -> Stealth -> Crouch ---> (repeat)
  * @param {*} Ped The players' ped
  * @param {*} AdvanceTo The specific stance to advance to if available (Optional)
- * @description Advances to the next available stance, stance order: Idle -> Stealth -> Crouch ---> (repeat)
  * @returns returnless
  * @example AdvanceStance(Ped)
  */
@@ -303,8 +304,9 @@ const AdvanceStance = (Ped, AdvanceTo = undefined) => {
 }
 
 /**
- * @param {*} Ped The players' ped
+ * @name ResetProneAnimation 
  * @description Resets the players' ped animation, this is basically being called after in every stance except the prone stance in case the prone animation get bugged.. from experience :/
+ * @param {*} Ped The players' ped
  * @returns returnless
  * @example ResetProneAnimation(Ped)
  */
@@ -322,8 +324,9 @@ const ResetProneAnimation = Ped => {
 }
 
 /**
- * @param {*} Ped The players' ped
+ * @name Idle 
  * @description Sets the players' ped stance to Idle
+ * @param {*} Ped The players' ped
  * @returns returnless
  * @example Idle(Ped)
  */
@@ -357,8 +360,9 @@ const Idle = (Ped) => {
 }
 
 /**
- * @param {*} Ped The players' ped
+ * @name Prone 
  * @description Sets the players' ped stance to prone
+ * @param {*} Ped The players' ped
  * @returns returnless
  * @example Prone(Ped)
  */
@@ -419,8 +423,9 @@ const Prone = (Ped) => {
 }
 
 /**
- * @param {*} Ped The players' ped
+ * @name ProneFlip 
  * @description Flip players' ped whilst in prone stance to crawl on stomach or back
+ * @param {*} Ped The players' ped
  * @returns returnless
  * @example ProneFlip(Ped)
  */
@@ -442,8 +447,9 @@ const ProneFlip = (Ped) => {
 
 
 /**
- * @param {*} Ped The players' ped
+ * @name UpdateProne 
  * @description Handles changes to the prone stnace like; weapon change, start/stop aiming, and flipping on stomach/back
+ * @param {*} Ped The players' ped
  * @returns returnless
  * @example UpdateProne(Ped)
  */
@@ -458,8 +464,9 @@ const UpdateProne = (Ped) => {
 }
 
 /**
- * @param {*} Ped The players' ped
+ * @name HandleProneWeaponChange 
  * @description Handles weapons changes... self-explanatory
+ * @param {*} Ped The players' ped
  * @returns returnless
  * @example HandleProneWeaponChange(Ped)
  */
@@ -472,10 +479,10 @@ const HandleProneWeaponChange = (Ped) => {
 }
 
 /**
- * @param {*} Ped The players' ped
+ * @name HandleProneMovement 
  * @description Handles the players' movements in the prone stnace
+ * @param {*} Ped The players' ped
  * @returns returnless
- * @var Cached.Prone._debounceTime is used to determine how fast you should be crawling while turning left/right or else you'd be crawling like a snail :p
  * @example HandleProneWeaponChange(Ped)
  */
 const HandleProneMovement = async (Ped) => {
@@ -485,7 +492,7 @@ const HandleProneMovement = async (Ped) => {
             Crawl(Ped, IsControlJustPressed(2, Controls.Forward) ? Movements.Forward : Movements.Backward);
         }
     } else if (IsControlPressed(2, Controls.Backward) || IsControlPressed(2, Controls.Forward)) {
-        if (Cached.Prone._lastKeyPressAt >= GetGameTimer() - Cached.Prone._debounceTime) return;
+        if (Cached.Prone._lastKeyPressAt >= GetGameTimer() - Cached.Prone._debounceTime) return; // (Cached.Prone._debounceTime) is checked
         Cached.Prone._lastKeyPressAt = GetGameTimer();
 
         if (!Cached.Prone._isCrawlInProgress) {
@@ -493,12 +500,12 @@ const HandleProneMovement = async (Ped) => {
         }
     }
     if (IsControlJustPressed(2, Controls.Left) || IsControlJustPressed(2, Controls.Right)) {
-        Cached.Prone._debounceTime = 100;
+        Cached.Prone._debounceTime = 100; // This is used to determine how fast you should be crawling while turning left/right
         Cached.Prone._lastLeftRightPressAt = GetGameTimer();
 
         SetEntityHeading(Ped, IsControlJustPressed(2, Controls.Left) ? GetEntityHeading(Ped) - 2 : GetEntityHeading(Ped) + 2);
     } else if (IsControlPressed(2, Controls.Left) || IsControlPressed(2, Controls.Right)) {
-        Cached.Prone._debounceTime = 10;
+        Cached.Prone._debounceTime = 10; // This is used to determine how fast you should be crawling while turning left/right
         Cached.Prone._lastLeftRightPressAt = GetGameTimer();
 
         SetEntityHeading(Ped, IsControlPressed(2, Controls.Left) ? GetEntityHeading(Ped) - .75 : GetEntityHeading(Ped) + .75);
@@ -506,11 +513,11 @@ const HandleProneMovement = async (Ped) => {
 }
 
 /**
+ * @name Crawl 
+ * @description Handles the players' movements in the prone stnace
  * @param {*} Ped The players' ped
  * @param {*} Direction The players' ped
- * @description Handles the players' movements in the prone stnace
  * @returns returnless
- * @var Cached.Prone._debounceTime is used to determine how fast you should be crawling while turning left/right and is used as timing for the animation
  * @example Crawl(Ped, Movements.Forward)
  */
 const Crawl = async (Ped, Direction) => {
@@ -532,8 +539,9 @@ const Crawl = async (Ped, Direction) => {
 }
 
 /**
- * @param {*} Ped The players' ped
+ * @name handleProneAim 
  * @description Handles the weapon aim while in prone stance 
+ * @param {*} Ped The players' ped
  * @returns returnless
  * @example handleProneAim(Ped)
  */
@@ -565,8 +573,9 @@ const handleProneAim = (Ped) => {
 }
 
 /**
- * @param {*} Ped The players' ped
+ * @name IsPedUsingSniper 
  * @description Checks if the passed ped is using a sniper
+ * @param {*} Ped The players' ped
  * @returns Boolean
  * @example IsPedUsingSniper(Ped)
  */
