@@ -1,16 +1,14 @@
 /**
- * Stance Modifier (Javascript edition)
- * Author: Ammar B. (Discord: Ammar B.#5160)
- * Release: 1.0.1
+ * StanceModifier (Javascript Edition)
+ * Author: Ammar B. (Discord: Ammar B.#7897)
+ * Release: 2.0.0
  * Date: 30/1/2020
  * 
  * Credits to:
  * JediJosh920 (https://www.gta5-mods.com/users/jedijosh920) (https://www.youtube.com/channel/UCmvRF-KB6xCwjHnNgMeUDXw)
  * TimothyDexter  (https://forum.cfx.re/u/timothy_dexter) 
  * 
- * Original CFX post (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038) By TimothyDexter (https://forum.cfx.re/t/release-stance-modifier-crouch-and-prone/172038)
- * 
- * DM me on discord or open issue card on github or on the cfx post if you have any issues/bugs/improvements.
+ * open issue card on github or on the cfx post if you have any issues/bugs/improvements.
  * 
  * Issues:
  *   - Snipers force 3rd person view due to (SCRIPTED_GUN_TASK_PLANE_WING).
@@ -33,6 +31,7 @@
 //------------------------------------------------------------------------------------------------------------------------
 //                            MAKES SURE YOU KNOW WHAT YOU'RE DOING BEFORE YOU CHANGE ANYTHING 
 //========================================================================================================================
+
 
 
 /**
@@ -140,7 +139,7 @@ const Cached = {
         _allowFlip: null,
         _lastProneAt: null
     },
-
+    ped: null,
     stance: Stances.Idle
 }
 
@@ -159,6 +158,7 @@ RequestAnimSet('move_ped_crouched');
  */
 setInterval(() => {
     const Ped = PlayerPedId(); // The player's ped that will be used in every tick, this is the only GetPlayerPed native in this script
+    Cached.ped = Ped
 
     /**
      * This is basically the manager
@@ -597,3 +597,14 @@ const IsPedUsingSniper = (Ped) => {
 
     return true;
 }
+
+//========================================================================================================================
+//                                                     EXPORTS
+//                                                 SETTERS/GETTERS
+//------------------------------------------------------------------------------------------------------------------------
+//                            MAKES SURE YOU KNOW WHAT YOU'RE DOING BEFORE YOU CHANGE ANYTHING 
+//========================================================================================================================
+
+exports('GetStance', () => Cached.stance)
+
+exports('SetStance', Stance => AdvanceStance(Cached.ped, Stance))
