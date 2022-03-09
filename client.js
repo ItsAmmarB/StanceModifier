@@ -2,7 +2,7 @@
  * StanceModifier (Javascript Edition)
  * Author: Ammar B. (Discord: Ammar B.#7897)
  * Release: 2.0.0
- * Date: 30/1/2020
+ * Date: 3/8/2020
  * 
  * Credits to:
  * JediJosh920 (https://www.gta5-mods.com/users/jedijosh920) (https://www.youtube.com/channel/UCmvRF-KB6xCwjHnNgMeUDXw)
