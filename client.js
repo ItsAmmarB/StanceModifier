@@ -168,24 +168,29 @@ setInterval(() => {
     switch (Cached.stance) {
         case Stances.Idle:
             {
-                SetPedStealthMovement(Ped, false, 0)
+                SetPedStealthMovement(Ped, false, 'DEFAULT_ACTION')
+                ResetPedWeaponMovementClipset(Ped)
+                SetPedMaxMoveBlendRatio(Ped, 1)
                 ResetProneAnimation(Ped);
                 break;
             }
         case Stances.Stealth:
             {
-                SetPedStealthMovement(Ped, true, 0)
+                SetPedStealthMovement(Ped, true, 'DEFAULT_ACTION')
+                ResetPedWeaponMovementClipset(Ped)
+                SetPedMaxMoveBlendRatio(Ped, 1)
                 break;
             }
         case Stances.Crouch:
             {
-                SetPedCanPlayAmbientAnims(Ped, false)
-                SetPedCanPlayAmbientBaseAnims(Ped, false)
-                SetPedStealthMovement(Ped, false, 0)
+                SetPedStealthMovement(Ped, false, 'DEFAULT_ACTION')
                 ResetProneAnimation(Ped);
 
+                SetPedUsingActionMode(Ped, false, -1, 'DEFAULT_ACTION')
                 SetPedMovementClipset(Ped, 'move_ped_crouched', 0.55);
                 SetPedStrafeClipset(Ped, 'move_ped_crouched_strafing');
+                SetWeaponAnimationOverride(Ped, "Ballistic")
+                SetPedMaxMoveBlendRatio(Ped, 0.2)
 
                 if (!Config.EnabledFPV && GetFollowPedCamViewMode() === 4) {
                     SetFollowPedCamViewMode(0);
@@ -204,9 +209,12 @@ setInterval(() => {
         case Stances.Prone.Stomach:
         case Stances.Prone.Back:
             {
-                DisableControlAction(0, Controls.Stance, true) // Disabled the duck key to prevent other stances from interferring, prone can be canceled with the jump key
-                !Config.FireWhileProne ? DisableControlAction(0, Controls.Aim, true) : undefined;
-                SetPedStealthMovement(Ped, false, 0)
+                SetPedStealthMovement(Ped, false, 'DEFAULT_ACTION')
+
+                ResetPedMovementClipset(Ped, 1);
+                ResetPedStrafeClipset(Ped);
+
+                if (!Config.FireWhileProne) DisableControlAction(0, Controls.Aim, true)
 
                 if (Cached.Prone._isDiveInProgree) break;
 
@@ -218,7 +226,6 @@ setInterval(() => {
                     break;
                 }
 
-                // HandleProneFlips(Ped);
                 HandleProneWeaponChange(Ped);
                 handleProneAim(Ped)
                 HandleProneMovement(Ped);
@@ -232,7 +239,8 @@ setInterval(() => {
      */
     if (IsPedCuffed(Ped) || IsPedUsingAnyScenario(Ped) || IsEntityPlayingAnim(Ped, 'mp_arresting', 'idle', 3) ||
         IsEntityPlayingAnim(Ped, 'random@mugging3', 'handsup_standing_base', 3) || IsEntityPlayingAnim(Ped, 'random@arrests@busted', 'idle_a', 3) ||
-        IsPedInAnyVehicle(Ped, false) || IsEntityInWater(Ped) || IsPedSwimming(Ped) || IsPedSwimmingUnderWater(Ped) || GetVehiclePedIsTryingToEnter(Ped) !== 0) {
+        IsPedInAnyVehicle(Ped, false) || IsEntityInWater(Ped) || IsPedSwimming(Ped) || IsPedSwimmingUnderWater(Ped) || GetVehiclePedIsTryingToEnter(Ped) !== 0 ||
+        IsPedDeadOrDying(Ped) || IsPedJumping(Ped) || !IsPedOnFoot(Ped)) {
         Idle(Ped)
     }
 }, 15);
@@ -251,17 +259,19 @@ const AdvanceStance = (Ped, AdvanceTo = undefined) => {
         Cached.stance === Stances.Prone.Stomach || Cached.stance === Stances.Prone.Back ? ClearPedTasks(Ped) : undefined;
         switch (AdvanceTo) {
             case Stances.Idle: {
+                if (Cached.stance === Stances.Crouch) { ResetPedMovementClipset(Ped, 1); ResetPedStrafeClipset(Ped); };
+
                 SetPedCanPlayAmbientAnims(Ped, true)
                 SetPedCanPlayAmbientBaseAnims(Ped, true)
-                Cached.stance === Stances.Crouch ? Idle(Ped) : undefined;
 
                 Cached.stance = Stances.Idle;
                 return;
             }
             case Stances.Stealth: {
+                if (Cached.stance === Stances.Crouch) { ResetPedMovementClipset(Ped, 1); ResetPedStrafeClipset(Ped); };
+
                 SetPedCanPlayAmbientAnims(Ped, true)
                 SetPedCanPlayAmbientBaseAnims(Ped, true)
-                Cached.stance === Stances.Crouch ? Idle(Ped) : undefined;
 
                 Cached.stance = Stances.Stealth;
                 return;
@@ -373,6 +383,8 @@ const Prone = (Ped) => {
     Cached.Prone._lastProneAt = GetGameTimer()
     Cached.Prone._previousState = Cached.stance;
     Cached.Prone._previousWeapon = GetHashKey(GetCurrentPedWeapon(Ped, true));
+
+    SetPedStealthMovement(Ped, false, 0)
 
     let _DiveInterferInterval;
 
