@@ -170,7 +170,6 @@ setInterval(() => {
             {
                 SetPedStealthMovement(Ped, false, 'DEFAULT_ACTION')
                 ResetPedWeaponMovementClipset(Ped)
-                SetPedMaxMoveBlendRatio(Ped, 1)
                 ResetProneAnimation(Ped);
                 break;
             }
@@ -178,7 +177,6 @@ setInterval(() => {
             {
                 SetPedStealthMovement(Ped, true, 'DEFAULT_ACTION')
                 ResetPedWeaponMovementClipset(Ped)
-                SetPedMaxMoveBlendRatio(Ped, 1)
                 break;
             }
         case Stances.Crouch:
@@ -190,7 +188,6 @@ setInterval(() => {
                 SetPedMovementClipset(Ped, 'move_ped_crouched', 0.55);
                 SetPedStrafeClipset(Ped, 'move_ped_crouched_strafing');
                 SetWeaponAnimationOverride(Ped, "Ballistic")
-                SetPedMaxMoveBlendRatio(Ped, 0.2)
 
                 if (!Config.EnabledFPV && GetFollowPedCamViewMode() === 4) {
                     SetFollowPedCamViewMode(0);
