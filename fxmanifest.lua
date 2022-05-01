@@ -9,9 +9,5 @@ version '2.0'
 url 'https://github.com/ItsAmmarB/StanceModifier'
 
 client_script {
-    'client.js'    
-}
-
-server_script {
-    'server.js'    
+    'cl_index.js'    
 }
