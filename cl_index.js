@@ -22,6 +22,7 @@
  *   - 2/1/2020 | 1.0.1 | Patch for ProneFlip, now works.
  *   - 2/2/2020 | 1.0.2 | Removed Server.js and the console message
  *   - 3/8/2022 | 2.0.0 | Complete overhual and re-write, many issues and bugs were fixed
+ *   - 5/3/2022 | 2.0.2 | Prone in car fix, made it more user-friendly.
  */
 
 
@@ -37,17 +38,21 @@
  * refer to https://docs.fivem.net/docs/game-references/controls/
  * if you want to change the default keybinds
  */
-const Controls = {
-    Forward: 32, // Move Forward (W)
-    Backward: 33, // Move Backward (S)
-    Right: 34, // Move Right (D)
-    Left: 35, // Move Left (A)
-    Aim: 25 // Aim (RIGHT MOUSE)
-};
-
 const Config = {
     FPV: false, // First Person View,
-    FireWhileProne: true
+    FireInProne: false,
+
+    Controls: {
+        Forward: 32, // Move Forward (W)
+        Backward: 33, // Move Backward (S)
+        Right: 34, // Move Right (D)
+        Left: 35, // Move Left (A)
+        Aim: 25 // Aim (RIGHT MOUSE)
+    },
+
+    Messages: {
+        NoFireInProne: ['^5(^0StanceModifier^5)', '^5Using a weapon in prone is disabled!']
+    }
 };
 /**
  * NOTES:
@@ -66,24 +71,39 @@ const Config = {
  * if you are thinking of adjusting any of the below default key mappings/keybinds
  */
 
-RegisterKeyMapping('=Stance-Advance', 'Advance Stance', 'keyboard', 'LCONTROL');
-RegisterKeyMapping('=Stance-ProneFlip', 'Prone flip', 'keyboard', 'X');
+RegisterKeyMapping('AdvanceStance', 'Advance Stance', 'keyboard', 'LCONTROL');
+RegisterKeyMapping('ProneFlip', 'Prone flip', 'keyboard', 'LSHIFT');
 
-RegisterKeyMapping('Idle', 'To Idle Stance', 'keyboard', 'SPACE');
+RegisterKeyMapping('Idle', 'To Idle Stance', 'keyboard', '');
 RegisterKeyMapping('Stealth', 'To Stealth Stance', 'keyboard', '');
-RegisterKeyMapping('Crouch', 'To Crouch Stance', 'keyboard', '');
+RegisterKeyMapping('Crouch', 'To Crouch Stance', 'keyboard', 'Z');
 RegisterKeyMapping('Prone', 'To Prone Stance', 'keyboard', 'X');
 
 /**
  * Using '=' as the first character decreases the possiblity of the command just randomly showing
  */
-RegisterCommand('=Stance-Advance', () => { AdvanceStance(PlayerPedId()); });
-RegisterCommand('=Stance-ProneFlip', () => { ProneFlip(PlayerPedId()); });
+RegisterCommand('AdvanceStance', () => {
+    if (CheckInterference(PlayerPedId())) return;
+    AdvanceStance(PlayerPedId());
+});
+RegisterCommand('ProneFlip', () => {
+    if (CheckInterference(PlayerPedId()) || Cached.Prone._isDiveInProgree) return;
+    ProneFlip(PlayerPedId());
+});
 
 RegisterCommand('Idle', () => { Idle(PlayerPedId()); });
-RegisterCommand('Stealth', () => { AdvanceStance(PlayerPedId(), Stances.Stealth); });
-RegisterCommand('Crouch', () => { AdvanceStance(PlayerPedId(), Stances.Crouch); });
-RegisterCommand('Prone', () => { Prone(PlayerPedId()); });
+RegisterCommand('Stealth', () => {
+    if (CheckInterference(PlayerPedId()) || Cached.Prone._isDiveInProgree) return;
+    AdvanceStance(PlayerPedId(), Stances.Stealth);
+});
+RegisterCommand('Crouch', () => {
+    if (CheckInterference(PlayerPedId()) || Cached.Prone._isDiveInProgree) return;
+    AdvanceStance(PlayerPedId(), Stances.Crouch);
+});
+RegisterCommand('Prone', () => {
+    if (CheckInterference(PlayerPedId()) || Cached.Prone._isDiveInProgree) return;
+    Prone(PlayerPedId());
+});
 
 // ========================================================================================================================
 //                                                          VARIABLES
@@ -168,20 +188,21 @@ setInterval(() => {
     {
         SetPedStealthMovement(Ped, false, 'DEFAULT_ACTION');
         ResetPedWeaponMovementClipset(Ped);
-        ResetProneAnimation(Ped);
+        SetWeaponAnimationOverride(Ped, 'Default');
+
         break;
     }
     case Stances.Stealth:
     {
         SetPedStealthMovement(Ped, true, 'DEFAULT_ACTION');
         ResetPedWeaponMovementClipset(Ped);
+        SetWeaponAnimationOverride(Ped, 'Default');
+
         break;
     }
     case Stances.Crouch:
     {
         SetPedStealthMovement(Ped, false, 'DEFAULT_ACTION');
-        ResetProneAnimation(Ped);
-
         SetPedUsingActionMode(Ped, false, -1, 'DEFAULT_ACTION');
         SetPedMovementClipset(Ped, 'move_ped_crouched', 0.55);
         SetPedStrafeClipset(Ped, 'move_ped_crouched_strafing');
@@ -209,7 +230,7 @@ setInterval(() => {
         ResetPedMovementClipset(Ped, 1);
         ResetPedStrafeClipset(Ped);
 
-        if (!Config.FireWhileProne) DisableControlAction(0, Controls.Aim, true);
+        if (!Config.FireInProne) DisableControlAction(0, Config.Controls.Aim, true);
 
         if (Cached.Prone._isDiveInProgree) break;
 
@@ -220,7 +241,6 @@ setInterval(() => {
             Cached.stance = Stances.Idle;
             break;
         }
-
         HandleProneWeaponChange(Ped);
         handleProneAim(Ped);
         HandleProneMovement(Ped);
@@ -280,6 +300,12 @@ const AdvanceStance = (Ped, AdvanceTo = undefined) => {
             return;
         }
         case Stances.Crouch: {
+            if (Cached.stance === Stances.Prone.Stomach || Cached.stance === Stances.Prone.Back) {
+                ResetProneAnimation(Ped);
+            }
+            if (Cached.stance === Stances.Crouch) {
+                return Idle(Ped);
+            }
             SetPedCanPlayAmbientAnims(Ped, false);
             SetPedCanPlayAmbientBaseAnims(Ped, false);
 
@@ -300,15 +326,16 @@ const AdvanceStance = (Ped, AdvanceTo = undefined) => {
             SetPedCanPlayAmbientAnims(Ped, false);
             SetPedCanPlayAmbientBaseAnims(Ped, false);
 
-            Cached.stance = Stances.Crouch;
+            Cached.stance = Stances.Idle;
             return;
         }
         case Stances.Crouch: {
             SetPedCanPlayAmbientAnims(Ped, true);
             SetPedCanPlayAmbientBaseAnims(Ped, true);
-            Idle(Ped);
+            ResetPedMovementClipset(Ped, 1);
+            ResetPedStrafeClipset(Ped);
 
-            Cached.stance = Stances.Idle;
+            Cached.stance = Stances.Stealth;
             return;
         }
         }
@@ -346,7 +373,7 @@ const CheckInterference = Ped => {
     if (IsPedCuffed(Ped) || IsPedUsingAnyScenario(Ped) || IsEntityPlayingAnim(Ped, 'mp_arresting', 'idle', 3) ||
         IsEntityPlayingAnim(Ped, 'random@mugging3', 'handsup_standing_base', 3) || IsEntityPlayingAnim(Ped, 'random@arrests@busted', 'idle_a', 3) ||
         IsPedInAnyVehicle(Ped, false) || IsEntityInWater(Ped) || IsPedSwimming(Ped) || IsPedSwimmingUnderWater(Ped) || GetVehiclePedIsTryingToEnter(Ped) !== 0 ||
-        IsPedDeadOrDying(Ped) || IsPedJumping(Ped) || !IsPedOnFoot(Ped)) {
+        IsPedDeadOrDying(Ped) || !IsPedOnFoot(Ped)) {
         return true;
     } else {
         return false;
@@ -364,15 +391,16 @@ const Idle = (Ped) => {
     switch (Cached.stance) {
     case Stances.Crouch:
     {
-        ResetProneAnimation(Ped);
         ResetPedMovementClipset(Ped, 1);
         ResetPedStrafeClipset(Ped);
+
+        SetPedCanPlayAmbientAnims(Ped, true);
+        SetPedCanPlayAmbientBaseAnims(Ped, true);
         Cached.stance = Stances.Idle;
         break;
     }
     case Stances.Stealth:
     {
-        ResetProneAnimation(Ped);
         Cached.stance = Stances.Idle;
         break;
     }
@@ -397,15 +425,13 @@ const Idle = (Ped) => {
  * @example Prone(Ped)
  */
 const Prone = (Ped) => {
-    if (Cached.stance === Stances.Prone.Stomach ||
-        Cached.stance === Stances.Prone.Back ||
-        CheckInterference(Ped)) return;
+    if (Cached.stance === Stances.Prone.Stomach || Cached.stance === Stances.Prone.Back) return Idle(Ped);
+
+    Cached.Prone._previousState = Cached.stance;
+    Cached.Prone._lastProneAt = GetGameTimer();
+    Cached.Prone._previousWeapon = GetHashKey(GetCurrentPedWeapon(Ped, true));
 
     Cached.stance = Stances.Prone.Stomach;
-
-    Cached.Prone._lastProneAt = GetGameTimer();
-    Cached.Prone._previousState = Cached.stance;
-    Cached.Prone._previousWeapon = GetHashKey(GetCurrentPedWeapon(Ped, true));
 
     SetPedStealthMovement(Ped, false, 0);
 
@@ -441,16 +467,19 @@ const Prone = (Ped) => {
         clearInterval(_DiveInterferInterval); // Clearing the interval in line No.336
         if (Cached.stance === Stances.Prone.Stomach || Cached.stance === Stances.Prone.Back) {
             if (IsPedRagdoll(Ped)) {
-                Cached.stance = Stances.Idle;
-            } else if (Config.FireWhileProne && IsPedArmed(Ped, 4)) {
-                TaskAimGunScripted(Ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true); // This is the same animation when Trevor was on the plane wing and shooting in Singleplayer
-            } else {
-                const [pX, pY, pZ] = GetEntityCoords(Ped);
-                const [rX, rY, rZ] = GetEntityRotation(Ped, 0);
-                const animStartTime = 1;
-                const animFlags = 2; // ANIM_FLAG_STOP_LAST_FRAME
-                TaskPlayAnimAdvanced(Ped, 'move_crawl', 'onfront_fwd', pX, pY, pZ, rX, rY, rZ, 8, -8, -1, animFlags, animStartTime, 2, 0);
+                return Cached.stance = Stances.Idle;
+            } else if (IsPedArmed(Ped, 4)) {
+                if (Config.FireInProne) {
+                    return TaskAimGunScripted(Ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true); // This is the same animation when Trevor was on the plane wing and shooting in Singleplayer
+                } else {
+                    emit('chat:addMessage', { args: Config.Messages.NoFireInProne });
+                }
             }
+            const [pX, pY, pZ] = GetEntityCoords(Ped);
+            const [rX, rY, rZ] = GetEntityRotation(Ped, 0);
+            const animStartTime = 1;
+            const animFlags = 2; // ANIM_FLAG_STOP_LAST_FRAME
+            TaskPlayAnimAdvanced(Ped, 'move_crawl', 'onfront_fwd', pX, pY, pZ, rX, rY, rZ, 8, -8, -1, animFlags, animStartTime, 2, 0);
         }
     }, Cached.Prone._isDiveInProgree ? Timers.ProneTransition : 0);
 };
@@ -463,11 +492,16 @@ const Prone = (Ped) => {
  * @example ProneFlip(Ped)
  */
 const ProneFlip = (Ped) => {
+    if (Cached.Prone._isDiveInProgree) return;
+    if (Cached.stance !== Stances.Prone.Stomach && Cached.stance !== Stances.Prone.Back) return console.log('not prone!');
+
     if (Cached.Prone._lastProneAt >= GetGameTimer() - Timers.DelayToFlip) return;
     if (Cached.Prone._lastBodyFlipAt >= GetGameTimer() - Timers.DelayToNextFlip) return;
 
     Cached.Prone._lastBodyFlipAt = GetGameTimer();
 
+    console.log(`Cached.stance: ${Cached.stance}`);
+    console.log(`Cached.Prone._previousState: ${Cached.Prone._previousState}`);
     if (Cached.stance !== Cached.Prone._previousState) {
         SetEntityHeading(Ped, GetEntityHeading(Ped) + 180); // Rotating 180 degrees
         Cached.Prone._previousState = Cached.stance;
@@ -518,29 +552,29 @@ const HandleProneWeaponChange = (Ped) => {
  * @example HandleProneWeaponChange(Ped)
  */
 const HandleProneMovement = (Ped) => {
-    if (IsControlJustPressed(2, Controls.Backward) || IsControlJustPressed(2, Controls.Forward)) {
+    if (IsControlJustPressed(2, Config.Controls.Backward) || IsControlJustPressed(2, Config.Controls.Forward)) {
         Cached.Prone._lastKeyPressAt = GetGameTimer();
         if (!Cached.Prone._isCrawlInProgress) {
-            Crawl(Ped, IsControlJustPressed(2, Controls.Forward) ? Movements.Forward : Movements.Backward);
+            Crawl(Ped, IsControlJustPressed(2, Config.Controls.Forward) ? Movements.Forward : Movements.Backward);
         }
-    } else if (IsControlPressed(2, Controls.Backward) || IsControlPressed(2, Controls.Forward)) {
+    } else if (IsControlPressed(2, Config.Controls.Backward) || IsControlPressed(2, Config.Controls.Forward)) {
         if (Cached.Prone._lastKeyPressAt >= GetGameTimer() - Cached.Prone._debounceTime) return; // (Cached.Prone._debounceTime) is checked
         Cached.Prone._lastKeyPressAt = GetGameTimer();
 
         if (!Cached.Prone._isCrawlInProgress) {
-            Crawl(Ped, IsControlPressed(2, Controls.Forward) ? Movements.Forward : Movements.Backward);
+            Crawl(Ped, IsControlPressed(2, Config.Controls.Forward) ? Movements.Forward : Movements.Backward);
         }
     }
-    if (IsControlJustPressed(2, Controls.Left) || IsControlJustPressed(2, Controls.Right)) {
+    if (IsControlJustPressed(2, Config.Controls.Left) || IsControlJustPressed(2, Config.Controls.Right)) {
         Cached.Prone._debounceTime = 100; // This is used to determine how fast you should be crawling while turning left/right
         Cached.Prone._lastLeftRightPressAt = GetGameTimer();
 
-        SetEntityHeading(Ped, IsControlJustPressed(2, Controls.Left) ? GetEntityHeading(Ped) - 2 : GetEntityHeading(Ped) + 2);
-    } else if (IsControlPressed(2, Controls.Left) || IsControlPressed(2, Controls.Right)) {
+        SetEntityHeading(Ped, IsControlJustPressed(2, Config.Controls.Left) ? GetEntityHeading(Ped) - 2 : GetEntityHeading(Ped) + 2);
+    } else if (IsControlPressed(2, Config.Controls.Left) || IsControlPressed(2, Config.Controls.Right)) {
         Cached.Prone._debounceTime = 10; // This is used to determine how fast you should be crawling while turning left/right
         Cached.Prone._lastLeftRightPressAt = GetGameTimer();
 
-        SetEntityHeading(Ped, IsControlPressed(2, Controls.Left) ? GetEntityHeading(Ped) - 0.75 : GetEntityHeading(Ped) + 0.75);
+        SetEntityHeading(Ped, IsControlPressed(2, Config.Controls.Left) ? GetEntityHeading(Ped) - 0.75 : GetEntityHeading(Ped) + 0.75);
     }
 };
 
@@ -561,7 +595,7 @@ const Crawl = (Ped, Direction) => {
     if (Cached.stance === Stances.Prone.Stomach) {
         movementStr = Direction === Movements.Forward ? 'fwd' : 'bwd';
     } else {
-        movementStr = Direction === Movements.Backward ? 'bwd' : 'fwd';
+        movementStr = Direction === Movements.Forward ? 'bwd' : 'fwd';
     }
     const animStr = `${proneStateStr}_${movementStr}`;
     StopAnimTask(Ped, 'move_crawl', animStr, 0.0);
@@ -579,7 +613,7 @@ const Crawl = (Ped, Direction) => {
  */
 const handleProneAim = (Ped) => {
     const playerIsArmed = IsPedArmed(Ped, 4);
-    if (playerIsArmed && Config.FireWhileProne && !Cached.Prone._isCrawlInProgress && !Cached.Prone._AimActive && IsControlPressed(2, Controls.Aim)) {
+    if (playerIsArmed && Config.FireInProne && !Cached.Prone._isCrawlInProgress && !Cached.Prone._AimActive && IsControlPressed(2, Config.Controls.Aim)) {
         TaskAimGunScripted(Ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), true, true); // This is the same animation when Trevor was on the plane wing and shooting in Singleplayer
 
         if (!Cached.Prone._AimActive && Cached.stance === Stances.Prone.Back) {
@@ -593,7 +627,7 @@ const handleProneAim = (Ped) => {
             DisplaySniperScopeThisFrame(); // shows the reticle while using a sniper
         }
 
-    } else if (playerIsArmed && IsControlJustReleased(2, Controls.Aim)) {
+    } else if (playerIsArmed && IsControlJustReleased(2, Config.Controls.Aim)) {
         TaskAimGunScripted(Ped, GetHashKey('SCRIPTED_GUN_TASK_PLANE_WING'), false, false);
         Cached.Prone._AimActive = false;
         if (Cached.stance === Stances.Prone.Back) {
