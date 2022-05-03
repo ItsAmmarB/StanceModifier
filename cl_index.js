@@ -397,8 +397,10 @@ const Idle = (Ped) => {
  * @example Prone(Ped)
  */
 const Prone = (Ped) => {
-    if (Cached.stance === Stances.Prone.Stomach || Cached.stance === Stances.Prone.Back) return;
-    if(CheckInterference(Ped)) return;
+    if (Cached.stance === Stances.Prone.Stomach ||
+        Cached.stance === Stances.Prone.Back ||
+        CheckInterference(Ped)) return;
+
     Cached.stance = Stances.Prone.Stomach;
 
     Cached.Prone._lastProneAt = GetGameTimer();
